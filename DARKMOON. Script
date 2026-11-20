@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
 
@@ -22,8 +21,11 @@ local PanelSizes = {
 
 local Settings = {
 	-- Combat
+	MurderAimbot = false,
+	MurderAimlock = false,
+	AimSmoothness = 0.28,
 	KillAllLoop = false,
-	FlingPower = 180,
+	FlingPower = 220,
 
 	-- Visuals
 	RoleBoxESP = true,
@@ -31,7 +33,6 @@ local Settings = {
 	RoleTracerESP = false,
 	RoleHighlightESP = false,
 	GunESP = true,
-	Fullbright = false,
 
 	-- Movement
 	SprintEnabled = true,
@@ -45,18 +46,19 @@ local Settings = {
 	AutoPickupGun = false,
 
 	-- Settings
-	PanelSize = "Medium", -- "Small", "Medium", "Large"
+	PanelSize = "Medium",
 	AntiAFK = true,
 }
 
 local isSprinting = false
 local isFlinging = false
 local isKillingAll = false
+local isPickingUpGun = false
+local isHoldingAimInput = false
+local isMobileAimHeld = false
 local spectateIndex = 0
 local savedCollisionStates = {}
-local savedLighting = nil
 
--- Role Colors: Innocent = Green, Murderer = Red, Sheriff = Blue
 local RoleColors = {
 	Innocent = Color3.fromRGB(70, 255, 130),
 	Murderer = Color3.fromRGB(255, 65, 80),
@@ -91,7 +93,6 @@ ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
--- Anti-AFK Listener
 LocalPlayer.Idled:Connect(function()
 	if Settings.AntiAFK then
 		pcall(function()
@@ -101,7 +102,50 @@ LocalPlayer.Idled:Connect(function()
 	end
 end)
 
--- Custom DARKMOON emblem logo builder
+-- Mobile / Touch Quick Aim Trigger Button
+local MobileAimBtn = Instance.new("TextButton")
+MobileAimBtn.Name = "MobileAimButton"
+MobileAimBtn.Size = UDim2.new(0, 66, 0, 66)
+MobileAimBtn.Position = UDim2.new(1, -94, 0.62, 0)
+MobileAimBtn.BackgroundColor3 = Theme.CardBg
+MobileAimBtn.Text = "AIM\nMURDER"
+MobileAimBtn.TextColor3 = RoleColors.Murderer
+MobileAimBtn.Font = Enum.Font.GothamBlack
+MobileAimBtn.TextSize = 11
+MobileAimBtn.Visible = false
+MobileAimBtn.Active = true
+MobileAimBtn.Parent = ScreenGui
+
+local MobileAimCorner = Instance.new("UICorner")
+MobileAimCorner.CornerRadius = UDim.new(1, 0)
+MobileAimCorner.Parent = MobileAimBtn
+
+local MobileAimStroke = Instance.new("UIStroke")
+MobileAimStroke.Color = RoleColors.Murderer
+MobileAimStroke.Thickness = 2
+MobileAimStroke.Parent = MobileAimBtn
+
+local function refreshMobileAimVisibility()
+	local hasAimFeature = Settings.MurderAimbot or Settings.MurderAimlock
+	MobileAimBtn.Visible = hasAimFeature and (UserInputService.TouchEnabled or Camera.ViewportSize.X < 900)
+end
+
+MobileAimBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isMobileAimHeld = true
+		MobileAimBtn.BackgroundColor3 = RoleColors.Murderer
+		MobileAimBtn.TextColor3 = Theme.TextBright
+	end
+end)
+
+MobileAimBtn.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isMobileAimHeld = false
+		MobileAimBtn.BackgroundColor3 = Theme.CardBg
+		MobileAimBtn.TextColor3 = RoleColors.Murderer
+	end
+end)
+
 local function buildDarkmoonLogo(parent, showOptionsTag)
 	local LogoHolder = Instance.new("Frame")
 	LogoHolder.Name = "DarkmoonLogo"
@@ -195,7 +239,6 @@ end
 
 local initialSize = PanelSizes[Settings.PanelSize] or PanelSizes.Medium
 
--- Main Option Window
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, initialSize.X, 0, initialSize.Y)
@@ -203,6 +246,7 @@ MainFrame.Position = UDim2.new(0.04, 0, 0.21, 0)
 MainFrame.BackgroundColor3 = Theme.VoidBg
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
+MainFrame.Active = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
@@ -215,12 +259,12 @@ MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.2
 MainStroke.Parent = MainFrame
 
--- Header with DARKMOON Logo
 local Header = Instance.new("Frame")
 Header.Name = "Header"
 Header.Size = UDim2.new(1, 0, 0, 44)
 Header.BackgroundColor3 = Theme.SidebarBg
 Header.BorderSizePixel = 0
+Header.Active = true
 Header.Parent = MainFrame
 
 local HeaderCorner = Instance.new("UICorner")
@@ -265,7 +309,6 @@ local MinCorner = Instance.new("UICorner")
 MinCorner.CornerRadius = UDim.new(0, 7)
 MinCorner.Parent = MinimizeBtn
 
--- Re-open Pill with DARKMOON Logo
 local ReopenBtn = Instance.new("TextButton")
 ReopenBtn.Name = "ReopenButton"
 ReopenBtn.Size = UDim2.new(0, 166, 0, 40)
@@ -319,31 +362,6 @@ local function applyMovementStats(character)
 	hum.JumpPower = Settings.JumpPower
 end
 
-local function applyFullbright(enabled)
-	if enabled then
-		if not savedLighting then
-			savedLighting = {
-				Brightness = Lighting.Brightness,
-				ClockTime = Lighting.ClockTime,
-				GlobalShadows = Lighting.GlobalShadows,
-				Ambient = Lighting.Ambient,
-				OutdoorAmbient = Lighting.OutdoorAmbient,
-			}
-		end
-		Lighting.Brightness = 2
-		Lighting.ClockTime = 14
-		Lighting.GlobalShadows = false
-		Lighting.Ambient = Color3.fromRGB(200, 200, 215)
-		Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 215)
-	elseif savedLighting then
-		Lighting.Brightness = savedLighting.Brightness
-		Lighting.ClockTime = savedLighting.ClockTime
-		Lighting.GlobalShadows = savedLighting.GlobalShadows
-		Lighting.Ambient = savedLighting.Ambient
-		Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
-	end
-end
-
 local function restoreNoclip(character)
 	for part, wasCollidable in pairs(savedCollisionStates) do
 		if part and part.Parent and part:IsA("BasePart") then
@@ -356,6 +374,7 @@ local function restoreNoclip(character)
 end
 
 local function applyNoclipStep(character)
+	if isFlinging or isPickingUpGun then return end
 	if not Settings.Noclip then
 		restoreNoclip(character)
 		return
@@ -391,6 +410,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if hum and hum.Health > 0 then
 			hum:ChangeState(Enum.HumanoidStateType.Jumping)
 		end
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isHoldingAimInput = true
 	end
 end)
 
@@ -398,10 +419,11 @@ UserInputService.InputEnded:Connect(function(input)
 	if input.KeyCode == SPRINT_KEY then
 		isSprinting = false
 		applyMovementStats(LocalPlayer.Character)
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isHoldingAimInput = false
 	end
 end)
 
--- Draggable Header
 local dragging, dragStart, startPos
 Header.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -422,7 +444,6 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Left Sidebar & Pages
 local Sidebar = Instance.new("Frame")
 Sidebar.Name = "Sidebar"
 Sidebar.Size = UDim2.new(0, 118, 1, -45)
@@ -530,7 +551,6 @@ local function createCategoryTab(tabName)
 	return Page
 end
 
--- Pill Badge Toggle Button (ON / OFF)
 local function addToggleOption(page, titleText, subtitleText, settingKey, onChanged)
 	local Row = Instance.new("TextButton")
 	Row.Size = UDim2.new(1, -18, 0, 48)
@@ -970,6 +990,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 	table.clear(savedCollisionStates)
 	isFlinging = false
 	isKillingAll = false
+	isPickingUpGun = false
 	setSettingState("KillAllLoop", false)
 	applyMovementStats(char)
 	if spectateIndex == 0 then
@@ -983,6 +1004,7 @@ local function teleportToCFrame(targetCFrame)
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	if not hrp or not hum or hum.Health <= 0 then return end
+	if hum.Sit then hum.Sit = false end
 	hrp.AssemblyLinearVelocity = Vector3.zero
 	hrp.AssemblyAngularVelocity = Vector3.zero
 	hrp.CFrame = targetCFrame
@@ -1039,7 +1061,6 @@ local function cycleSpectate(dir)
 	end
 end
 
--- Click-to-Fling Target Player
 local function flingPlayer(targetPlayer)
 	if isFlinging or not targetPlayer or targetPlayer == LocalPlayer then return end
 
@@ -1048,57 +1069,83 @@ local function flingPlayer(targetPlayer)
 	local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
 
 	local targetChar = targetPlayer.Character
-	local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-	if not myRoot or not myHum or not targetRoot then return end
+	local targetRoot = targetChar and (targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso"))
+	local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+	if not myRoot or not myHum or not targetRoot or not targetHum or targetHum.Health <= 0 then return end
 
 	isFlinging = true
 	local origCFrame = myRoot.CFrame
-	local partsToRestore = {}
+	local savedStates = {}
 
 	for _, part in ipairs(myChar:GetDescendants()) do
 		if part:IsA("BasePart") then
-			table.insert(partsToRestore, { Part = part, CanCollide = part.CanCollide })
+			savedStates[part] = { CanCollide = part.CanCollide, Massless = part.Massless }
 			part.CanCollide = false
+			part.Massless = true
 		end
 	end
 
 	myHum:ChangeState(Enum.HumanoidStateType.Physics)
 
-	local bv = Instance.new("BodyVelocity")
-	bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-	bv.Parent = myRoot
+	local flingAttachment = Instance.new("Attachment")
+	flingAttachment.Name = "DarkmoonFlingAttachment"
+	flingAttachment.Parent = myRoot
 
-	local bav = Instance.new("BodyAngularVelocity")
-	bav.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
-	bav.AngularVelocity = Vector3.new(0, 65, 0)
-	bav.Parent = myRoot
+	local linVel = Instance.new("LinearVelocity")
+	linVel.Name = "DarkmoonFlingVel"
+	linVel.Attachment0 = flingAttachment
+	linVel.MaxForce = math.huge
+	linVel.RelativeTo = Enum.ActuatorRelativeTo.World
+	linVel.VectorVelocity = Vector3.zero
+	linVel.Parent = myRoot
+
+	local angVel = Instance.new("AngularVelocity")
+	angVel.Name = "DarkmoonFlingSpin"
+	angVel.Attachment0 = flingAttachment
+	angVel.MaxTorque = math.huge
+	angVel.AngularVelocity = Vector3.new(0, 95, 0)
+	angVel.RelativeTo = Enum.ActuatorRelativeTo.World
+	angVel.Parent = myRoot
 
 	local startClock = os.clock()
-	while (os.clock() - startClock) < 0.35 do
-		if not targetRoot.Parent or not myRoot.Parent then break end
-		local predicted = targetRoot.Position + (targetRoot.AssemblyLinearVelocity * 0.12)
-		myRoot.CFrame = CFrame.new(predicted)
-		local dir = (predicted - myRoot.Position)
-		local unit = dir.Magnitude > 0.05 and dir.Unit or Vector3.new(0, 0, -1)
-		bv.Velocity = (unit * Settings.FlingPower) + Vector3.new(0, Settings.FlingPower * 0.45, 0)
+	while (os.clock() - startClock) < 0.45 do
+		if not targetRoot.Parent or not targetHum or targetHum.Health <= 0 or not myRoot.Parent then break end
+		local predictedPos = targetRoot.Position + (targetRoot.AssemblyLinearVelocity * 0.14)
+		myRoot.AssemblyLinearVelocity = Vector3.zero
+		myRoot.AssemblyAngularVelocity = Vector3.new(0, 95, 0)
+		myRoot.CFrame = CFrame.new(predictedPos)
+
+		local delta = predictedPos - myRoot.Position
+		local dir = delta.Magnitude > 0.05 and delta.Unit or Vector3.new(0, 0, -1)
+		linVel.VectorVelocity = (dir * (Settings.FlingPower * 1.4)) + Vector3.new(0, Settings.FlingPower * 0.65, 0)
+
+		if typeof(firetouchinterest) == "function" then
+			pcall(function()
+				firetouchinterest(myRoot, targetRoot, 0)
+				firetouchinterest(myRoot, targetRoot, 1)
+			end)
+		end
+
 		RunService.Heartbeat:Wait()
 	end
 
-	bv:Destroy()
-	bav:Destroy()
+	linVel:Destroy()
+	angVel:Destroy()
+	flingAttachment:Destroy()
 
-	for _, entry in ipairs(partsToRestore) do
-		if entry.Part and entry.Part.Parent then
-			entry.Part.CanCollide = entry.CanCollide
+	for part, state in pairs(savedStates) do
+		if part and part.Parent then
+			part.CanCollide = state.CanCollide
+			part.Massless = state.Massless
 		end
 	end
 
-	if myRoot.Parent then
+	if myRoot and myRoot.Parent then
 		myRoot.AssemblyLinearVelocity = Vector3.zero
 		myRoot.AssemblyAngularVelocity = Vector3.zero
 		myRoot.CFrame = origCFrame + Vector3.new(0, 2, 0)
 	end
-	if myHum.Parent then
+	if myHum and myHum.Parent then
 		myHum:ChangeState(Enum.HumanoidStateType.GettingUp)
 	end
 
@@ -1198,7 +1245,6 @@ local function killAllTargets(autoRepeat)
 	isKillingAll = false
 end
 
--- In-Game Role Resolver
 local function normalizeRole(raw)
 	if typeof(raw) ~= "string" then return nil end
 	local r = string.lower(raw)
@@ -1298,7 +1344,25 @@ local function findActiveMurderer()
 	return findActiveRolePlayer("Murderer")
 end
 
--- Dropped Gun Detector & Reliable Pickup Helper
+local function getMurderAimPoint()
+	local murderPlr = findActiveMurderer()
+	if not murderPlr or not murderPlr.Character then return nil end
+
+	local char = murderPlr.Character
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then return nil end
+
+	local part = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+	if not part then return nil end
+
+	return part.Position + (part.AssemblyLinearVelocity * 0.08)
+end
+
+local function isAimTriggerActive()
+	return isHoldingAimInput or isMobileAimHeld
+end
+
+-- Dropped Gun Detector (Handles Tools, Models, BaseParts, Prompts & ClickDetectors)
 local function isPlayerOwnedDescendant(inst)
 	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr.Character and inst:IsDescendantOf(plr.Character) then
@@ -1318,33 +1382,52 @@ local function isGunKeyword(nameStr)
 		or string.find(lower, "revolver", 1, true)
 		or string.find(lower, "pistol", 1, true)
 		or string.find(lower, "droppedgun", 1, true)
+		or string.find(lower, "weapon", 1, true)
+end
+
+local function resolvePartFromContainer(container)
+	if not container then return nil end
+	if container:IsA("BasePart") then return container end
+	if container:IsA("Tool") then
+		return container:FindFirstChild("Handle") or container:FindFirstChildWhichIsA("BasePart", true)
+	end
+	if container:IsA("Model") then
+		return container.PrimaryPart or container:FindFirstChild("Handle") or container:FindFirstChildWhichIsA("BasePart", true)
+	end
+	return container:FindFirstChildWhichIsA("BasePart", true)
 end
 
 local function getDroppedGunTarget()
 	for _, obj in ipairs(workspace:GetDescendants()) do
 		if isPlayerOwnedDescendant(obj) then continue end
 
-		if obj:IsA("Tool") and isGunKeyword(obj.Name) then
-			local part = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart", true)
+		if (obj:IsA("Tool") or obj:IsA("Model") or obj:IsA("BasePart")) and isGunKeyword(obj.Name) then
+			local part = resolvePartFromContainer(obj)
 			if part then
 				local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-				return obj, part, prompt
+				local clickDetector = obj:FindFirstChildWhichIsA("ClickDetector", true)
+				return obj, part, prompt, clickDetector
 			end
-		elseif (obj:IsA("BasePart") or obj:IsA("Model")) and isGunKeyword(obj.Name) then
-			local part = obj:IsA("BasePart") and obj or (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true))
-			if part then
-				local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-				return obj, part, prompt
+		elseif obj:IsA("ProximityPrompt") and obj.Parent then
+			local parentObj = obj.Parent
+			if isGunKeyword(parentObj.Name) or isGunKeyword(obj.ActionText) or isGunKeyword(obj.ObjectText) then
+				local part = resolvePartFromContainer(parentObj)
+				if part then
+					return parentObj, part, obj, parentObj:FindFirstChildWhichIsA("ClickDetector", true)
+				end
 			end
-		elseif obj:IsA("ProximityPrompt") and obj.Parent and isGunKeyword(obj.Parent.Name) then
-			local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart", true)
-			if part then
-				return obj.Parent, part, obj
+		elseif obj:IsA("ClickDetector") and obj.Parent then
+			local parentObj = obj.Parent
+			if isGunKeyword(parentObj.Name) then
+				local part = resolvePartFromContainer(parentObj)
+				if part then
+					return parentObj, part, parentObj:FindFirstChildWhichIsA("ProximityPrompt", true), obj
+				end
 			end
 		end
 	end
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 end
 
 local function alreadyOwnsGun()
@@ -1352,27 +1435,53 @@ local function alreadyOwnsGun()
 	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
 	return hasRoleTool(char, "gun") or hasRoleTool(backpack, "gun")
 		or hasRoleTool(char, "revolver") or hasRoleTool(backpack, "revolver")
+		or hasRoleTool(char, "pistol") or hasRoleTool(backpack, "pistol")
 end
 
-local function triggerGunTouch(myRoot, gunPart)
+local function triggerGunPickup(myRoot, gunPart, prompt, clickDetector)
 	if not myRoot or not gunPart then return end
+
 	if typeof(firetouchinterest) == "function" then
 		pcall(function()
 			firetouchinterest(myRoot, gunPart, 0)
-			task.wait()
+			RunService.Heartbeat:Wait()
 			firetouchinterest(myRoot, gunPart, 1)
+		end)
+	end
+
+	if prompt and prompt.Parent then
+		pcall(function()
+			if typeof(fireproximityprompt) == "function" then
+				fireproximityprompt(prompt)
+			else
+				prompt:InputHoldBegin()
+				task.wait(0.06)
+				prompt:InputHoldEnd()
+			end
+		end)
+	end
+
+	if clickDetector and clickDetector.Parent and typeof(fireclickdetector) == "function" then
+		pcall(function()
+			fireclickdetector(clickDetector)
 		end)
 	end
 end
 
--- Build 5 Renamed Tabs: Combat, Visuals, Movement, Teleport, Settings
+-- Build 5 Tabs: Combat, Visuals, Movement, Teleport, Settings
 local CombatPage = createCategoryTab("Combat")
 local VisualsPage = createCategoryTab("Visuals")
 local MovementPage = createCategoryTab("Movement")
 local TeleportPage = createCategoryTab("Teleport")
 local SettingsPage = createCategoryTab("Settings")
 
--- Combat Tab
+addToggleOption(CombatPage, "Murder Aimbot", "Smooth aim on Murder (RMB / Touch)", "MurderAimbot", function()
+	refreshMobileAimVisibility()
+end)
+addToggleOption(CombatPage, "Murder Aimlock", "Hard lock camera on active Murder", "MurderAimlock", function()
+	refreshMobileAimVisibility()
+end)
+addSliderOption(CombatPage, "Aim Smoothness", 0.05, 1.0, 2, "AimSmoothness")
 addToggleOption(CombatPage, "Kill All Loop", "Repeat until all down or toggled off", "KillAllLoop", function(enabled)
 	if enabled and not isKillingAll then
 		task.spawn(function()
@@ -1385,17 +1494,12 @@ addActionOption(CombatPage, "Kill All Once", "Attack All", function()
 end)
 addSliderOption(CombatPage, "Fling Power", 80, 360, 0, "FlingPower")
 
--- Visuals Tab
 addToggleOption(VisualsPage, "2D Role Box", "Innocent Green • Murder Red • Sheriff Blue", "RoleBoxESP")
 addToggleOption(VisualsPage, "Role Name & Dist", "Show role and distance tags", "RoleNameESP")
 addToggleOption(VisualsPage, "Role Tracers", "Draw lines to active players", "RoleTracerESP")
 addToggleOption(VisualsPage, "Role Chams Glow", "Highlight player bodies through walls", "RoleHighlightESP")
 addToggleOption(VisualsPage, "Dropped Gun ESP", "Highlight dropped gun through walls", "GunESP")
-addToggleOption(VisualsPage, "Fullbright", "Brighten dark areas and shadows", "Fullbright", function(enabled)
-	applyFullbright(enabled)
-end)
 
--- Movement Tab
 addToggleOption(MovementPage, "Sprint (LeftShift)", "Hold LeftShift for speed boost", "SprintEnabled", function()
 	applyMovementStats(LocalPlayer.Character)
 end)
@@ -1415,7 +1519,6 @@ addSliderOption(MovementPage, "World Gravity", 35, 300, 0, "Gravity", function(v
 	workspace.Gravity = val
 end)
 
--- Teleport Tab (Quick TP + Auto Gun + Live Player List)
 addToggleOption(TeleportPage, "Auto Pickup Gun", "Snap & grab dropped gun immediately", "AutoPickupGun")
 addActionOption(TeleportPage, "TP to Murder", "Teleport", function()
 	teleportToPlayer(findActiveRolePlayer("Murderer"))
@@ -1425,7 +1528,6 @@ addActionOption(TeleportPage, "TP to Sheriff", "Teleport", function()
 end)
 addSpectateOption(TeleportPage, cycleSpectate)
 
--- Settings Tab
 local syncPanelSizeStepper = addStepperOption(
 	SettingsPage,
 	"Panel Size",
@@ -1461,7 +1563,6 @@ addActionOption(SettingsPage, "Reset Character", "Respawn", function()
 	if hum then hum.Health = 0 end
 end)
 
--- Quick Fling Murderer Banner inside Combat Tab
 local QuickMurderBanner = Instance.new("Frame")
 QuickMurderBanner.Name = "QuickMurderBanner"
 QuickMurderBanner.LayoutOrder = 0
@@ -1534,7 +1635,6 @@ QuickFlingBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Live Player Role List with Banner, TP & Click-to-Fling inside Teleport Tab
 local PlayerListCards = {}
 local nextCardOrder = 10
 
@@ -1709,8 +1809,8 @@ Players.PlayerAdded:Connect(createPlayerListCard)
 Players.PlayerRemoving:Connect(removePlayerListCard)
 
 selectTab("Combat")
+refreshMobileAimVisibility()
 
--- ESP Visuals Setup
 local ESPFolder = Instance.new("Folder")
 ESPFolder.Name = "DarkmoonESPVisuals"
 ESPFolder.Parent = ScreenGui
@@ -1960,12 +2060,24 @@ RunService.RenderStepped:Connect(function()
 			v.CharHighlight.Enabled = false
 		end
 	end
+
+	local murderAimPoint = getMurderAimPoint()
+	if murderAimPoint and spectateIndex == 0 then
+		local camPos = Camera.CFrame.Position
+		local desiredCFrame = CFrame.lookAt(camPos, murderAimPoint)
+
+		if Settings.MurderAimlock and isAimTriggerActive() then
+			Camera.CFrame = desiredCFrame
+		elseif Settings.MurderAimbot and isAimTriggerActive() then
+			Camera.CFrame = Camera.CFrame:Lerp(desiredCFrame, math.clamp(Settings.AimSmoothness, 0.05, 1))
+		end
+	end
 end)
 
 -- Reliable Auto Pickup Gun Loop
 task.spawn(function()
-	while task.wait(0.1) do
-		if isFlinging or isKillingAll or not Settings.AutoPickupGun then continue end
+	while task.wait(0.12) do
+		if isFlinging or isKillingAll or isPickingUpGun or not Settings.AutoPickupGun then continue end
 		if alreadyOwnsGun() then continue end
 
 		local char = LocalPlayer.Character
@@ -1973,28 +2085,22 @@ task.spawn(function()
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if not hrp or not hum or hum.Health <= 0 then continue end
 
-		local gunObj, gunPart, prompt = getDroppedGunTarget()
+		local gunObj, gunPart, prompt, clickDetector = getDroppedGunTarget()
 		if gunObj and gunPart and gunPart.Parent then
+			isPickingUpGun = true
 			local savedCFrame = hrp.CFrame
-			teleportToCFrame(CFrame.new(gunPart.Position + Vector3.new(0, 1, 0)))
-			triggerGunTouch(hrp, gunPart)
 
-			if prompt and prompt.Parent then
-				pcall(function()
-					if typeof(fireproximityprompt) == "function" then
-						fireproximityprompt(prompt)
-					else
-						prompt:InputHoldBegin()
-						task.wait(0.05)
-						prompt:InputHoldEnd()
-					end
-				end)
+			for _ = 1, 3 do
+				if not gunPart.Parent or alreadyOwnsGun() or not hrp.Parent then break end
+				teleportToCFrame(CFrame.new(gunPart.Position + Vector3.new(0, 1.2, 0)))
+				triggerGunPickup(hrp, gunPart, prompt, clickDetector)
+				task.wait(0.06)
 			end
 
-			task.wait(0.08)
 			if alreadyOwnsGun() and hrp and hrp.Parent then
 				teleportToCFrame(savedCFrame + Vector3.new(0, 1.5, 0))
 			end
+			isPickingUpGun = false
 		end
 	end
 end)
