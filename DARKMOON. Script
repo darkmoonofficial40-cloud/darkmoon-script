@@ -1,5 +1,5 @@
 -- =========================================================================================================================
--- 🔪 DARK MOON | [v1.0 - ULTIMATE SUMMER EDITION] 🔪
+-- 🌑 DARK MOON | [v1.0 - MODERN DARK MOON EDITION] 🌑
 -- =========================================================================================================================
 
 local Players = game:GetService("Players")
@@ -10,18 +10,20 @@ local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local TextChatService = game:GetService("TextChatService")
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
-if _G.NoyanMM2Loaded then
-    pcall(function() _G.NoyanMM2Cleanup() end)
+if _G.DarkMoonMM2Loaded then
+    pcall(function() _G.DarkMoonMM2Cleanup() end)
 end
-_G.NoyanMM2Loaded = true
+_G.DarkMoonMM2Loaded = true
 
 getgenv().MM2State = {
     Language = "English",
     RoleFilter = { Innocent = true, Sheriff = true, Hero = true, Murderer = true },
     AutoGrabAndReturnGun = false,
+    AutoAlertSheriff = false,
     SilentAimSheriff = false,
     GunAura = false,
     GunESP = false,
@@ -38,18 +40,12 @@ getgenv().MM2State = {
     KillAura = false,
     NameESP = false,
     AutoBlink = false,
-    InfiniteStamina = false,
     AutoSaveGun = false,
-    SheriffGodModeCheck = false,
     KnifeHitboxExpander = false,
     ThrowAura = false,
-    SilentKnife = false,
-    FastKnifeAnim = false,
     CoinMagnet = false,
-    AutoBuyBoxes = false,
-    SafeZoneTeleport = false,
-    LobbyTeleport = false,
-    CustomFOVValue = 70,
+    UIScaleMode = "Standard",
+    UIStyleMode = "DarkMoon",
     Connections = {},
     Highlights = {},
     GunHighlights = {},
@@ -60,70 +56,116 @@ getgenv().MM2State = {
 }
 local C = getgenv().MM2State
 
--- Tema Renkleri
-local ThemeColor = Color3.fromRGB(0, 255, 204)
-local DarkBg = Color3.fromRGB(13, 13, 18)
-local PanelBg = Color3.fromRGB(18, 18, 25)
+-- Dark Moon Palette
+local MoonColors = {
+    Accent = Color3.fromRGB(150, 190, 255),
+    SecondaryAccent = Color3.fromRGB(130, 115, 255),
+    VoidBg = Color3.fromRGB(7, 9, 15),
+    MainBg = Color3.fromRGB(11, 14, 23),
+    PanelBg = Color3.fromRGB(16, 20, 32),
+    CardBg = Color3.fromRGB(21, 26, 42),
+    Border = Color3.fromRGB(42, 52, 82),
+    TextPrimary = Color3.fromRGB(228, 235, 255),
+    TextMuted = Color3.fromRGB(145, 160, 196)
+}
 
--- UI Ana Çerçeve
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "NoyanX_MM2_UltimateEdition"
-ScreenGui.Parent = CoreGui
+local ThemeColor = MoonColors.Accent
+local DarkBg = MoonColors.MainBg
+local PanelBg = MoonColors.PanelBg
 
-_G.NoyanMM2Cleanup = function()
-    for _, conn in pairs(C.Connections) do pcall(function() conn:Disconnect() end) end
-    for _, h in pairs(C.Highlights) do if h then h:Destroy() end end
-    for _, h in pairs(C.GunHighlights) do if h then h:Destroy() end end
-    for _, t in pairs(C.NameTags) do if t then t:Destroy() end end
-    ScreenGui:Destroy()
-    _G.NoyanMM2Loaded = false
+local function trackConn(conn)
+    if conn then
+        table.insert(C.Connections, conn)
+    end
+    return conn
 end
 
--- Yüklenme Ekranı
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DarkMoon_MM2_v1_0"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+_G.DarkMoonMM2Cleanup = function()
+    for _, conn in pairs(C.Connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    table.clear(C.Connections)
+    for _, h in pairs(C.Highlights) do
+        if h then pcall(function() h:Destroy() end) end
+    end
+    for _, h in pairs(C.GunHighlights) do
+        if h then pcall(function() h:Destroy() end) end
+    end
+    for _, t in pairs(C.NameTags) do
+        if t then pcall(function() t:Destroy() end) end
+    end
+    table.clear(C.Highlights)
+    table.clear(C.GunHighlights)
+    table.clear(C.NameTags)
+    pcall(function() ScreenGui:Destroy() end)
+    _G.DarkMoonMM2Loaded = false
+end
+
+trackConn(Players.PlayerRemoving:Connect(function(plr)
+    if C.Highlights[plr] then
+        pcall(function() C.Highlights[plr]:Destroy() end)
+        C.Highlights[plr] = nil
+    end
+    if C.NameTags[plr] then
+        pcall(function() C.NameTags[plr]:Destroy() end)
+        C.NameTags[plr] = nil
+    end
+    C.AnnouncedKillers[plr] = nil
+    C.AnnouncedSheriffs[plr] = nil
+end))
+
+-- Loading Screen
 local LoadingScreen = Instance.new("Frame")
 LoadingScreen.Size = UDim2.new(1, 0, 1, 0)
-LoadingScreen.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+LoadingScreen.BackgroundColor3 = MoonColors.VoidBg
 LoadingScreen.ZIndex = 100
 LoadingScreen.Parent = ScreenGui
 
 local LoadContainer = Instance.new("Frame")
-LoadContainer.Size = UDim2.new(0, 400, 0, 160)
-LoadContainer.Position = UDim2.new(0.5, -200, 0.5, -80)
+LoadContainer.Size = UDim2.new(0, 410, 0, 165)
+LoadContainer.Position = UDim2.new(0.5, -205, 0.5, -82)
 LoadContainer.BackgroundColor3 = PanelBg
 LoadContainer.BorderSizePixel = 0
 LoadContainer.ZIndex = 101
 LoadContainer.Parent = LoadingScreen
-Instance.new("UICorner", LoadContainer).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", LoadContainer).CornerRadius = UDim.new(0, 14)
+
 local LoadStroke = Instance.new("UIStroke", LoadContainer)
 LoadStroke.Color = ThemeColor
-LoadStroke.Transparency = 0.5
+LoadStroke.Transparency = 0.35
 
 local LoadTitle = Instance.new("TextLabel")
-LoadTitle.Size = UDim2.new(1, 0, 0, 40)
-LoadTitle.Position = UDim2.new(0, 0, 0, 15)
+LoadTitle.Size = UDim2.new(1, 0, 0, 38)
+LoadTitle.Position = UDim2.new(0, 0, 0, 18)
 LoadTitle.BackgroundTransparency = 1
-LoadTitle.Text = "NOYAN X MM2"
+LoadTitle.Text = "🌑 DARK MOON · v1.0"
 LoadTitle.TextColor3 = ThemeColor
 LoadTitle.Font = Enum.Font.GothamBold
-LoadTitle.TextSize = 20
+LoadTitle.TextSize = 19
 LoadTitle.ZIndex = 102
 LoadTitle.Parent = LoadContainer
 
 local LoadSubText = Instance.new("TextLabel")
 LoadSubText.Size = UDim2.new(1, 0, 0, 20)
-LoadSubText.Position = UDim2.new(0, 0, 0, 55)
+LoadSubText.Position = UDim2.new(0, 0, 0, 58)
 LoadSubText.BackgroundTransparency = 1
-LoadSubText.Text = "Loading Ultimate Edition (aslan_nqy)..."
-LoadSubText.TextColor3 = Color3.fromRGB(180, 180, 200)
+LoadSubText.Text = "Syncing lunar modules & UI engine (biyxznd)..."
+LoadSubText.TextColor3 = MoonColors.TextMuted
 LoadSubText.Font = Enum.Font.Gotham
-LoadSubText.TextSize = 13
+LoadSubText.TextSize = 12
 LoadSubText.ZIndex = 102
 LoadSubText.Parent = LoadContainer
 
 local LoadBarBG = Instance.new("Frame")
-LoadBarBG.Size = UDim2.new(0, 340, 0, 8)
-LoadBarBG.Position = UDim2.new(0.5, -170, 0, 105)
-LoadBarBG.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+LoadBarBG.Size = UDim2.new(0, 346, 0, 8)
+LoadBarBG.Position = UDim2.new(0.5, -173, 0, 108)
+LoadBarBG.BackgroundColor3 = MoonColors.CardBg
+LoadBarBG.BorderSizePixel = 0
 LoadBarBG.ZIndex = 102
 LoadBarBG.Parent = LoadContainer
 Instance.new("UICorner", LoadBarBG).CornerRadius = UDim.new(1, 0)
@@ -131,68 +173,81 @@ Instance.new("UICorner", LoadBarBG).CornerRadius = UDim.new(1, 0)
 local LoadBarFill = Instance.new("Frame")
 LoadBarFill.Size = UDim2.new(0, 0, 1, 0)
 LoadBarFill.BackgroundColor3 = ThemeColor
+LoadBarFill.BorderSizePixel = 0
 LoadBarFill.ZIndex = 103
 LoadBarFill.Parent = LoadBarBG
 Instance.new("UICorner", LoadBarFill).CornerRadius = UDim.new(1, 0)
 
 task.spawn(function()
-    TweenService:Create(LoadBarFill, TweenInfo.new(1.2, Enum.EasingStyle.Quart), {Size = UDim2.new(1, 0, 1, 0)}):Play()
-    task.wait(1.4)
-    TweenService:Create(LoadingScreen, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(LoadContainer, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(LoadStroke, TweenInfo.new(0.5), {Transparency = 1}):Play()
-    TweenService:Create(LoadTitle, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-    TweenService:Create(LoadSubText, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-    TweenService:Create(LoadBarBG, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(LoadBarFill, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-    task.wait(0.5)
-    LoadingScreen:Destroy()
+    TweenService:Create(LoadBarFill, TweenInfo.new(1.1, Enum.EasingStyle.Quart), {Size = UDim2.new(1, 0, 1, 0)}):Play()
+    task.wait(1.3)
+    for _, obj in ipairs({LoadingScreen, LoadContainer, LoadBarBG, LoadBarFill}) do
+        TweenService:Create(obj, TweenInfo.new(0.45), {BackgroundTransparency = 1}):Play()
+    end
+    TweenService:Create(LoadStroke, TweenInfo.new(0.45), {Transparency = 1}):Play()
+    for _, lbl in ipairs({LoadTitle, LoadSubText}) do
+        TweenService:Create(lbl, TweenInfo.new(0.45), {TextTransparency = 1}):Play()
+    end
+    task.wait(0.48)
+    if LoadingScreen and LoadingScreen.Parent then
+        LoadingScreen:Destroy()
+    end
 end)
 
--- Küçültme / Açma Butonu
+-- Floating Lunar Toggle Button
 local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(0, 42, 0, 42)
-ToggleBtn.Position = UDim2.new(0, 20, 0.4, 0)
+ToggleBtn.Size = UDim2.new(0, 46, 0, 46)
+ToggleBtn.Position = UDim2.new(0, 20, 0.38, 0)
 ToggleBtn.BackgroundColor3 = PanelBg
-ToggleBtn.Text = "NX"
+ToggleBtn.Text = "🌑"
 ToggleBtn.TextColor3 = ThemeColor
 ToggleBtn.Font = Enum.Font.GothamBold
-ToggleBtn.TextSize = 13
+ToggleBtn.TextSize = 18
 ToggleBtn.Draggable = true
 ToggleBtn.Active = true
 ToggleBtn.Parent = ScreenGui
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
 local ToggleBtnStroke = Instance.new("UIStroke", ToggleBtn)
 ToggleBtnStroke.Color = ThemeColor
+ToggleBtnStroke.Thickness = 1.4
 
--- Ana Pencere
+-- Main Window
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 620, 0, 450)
-MainFrame.Position = UDim2.new(0.5, -310, 0.5, -225)
+MainFrame.Size = UDim2.new(0, 640, 0, 460)
+MainFrame.Position = UDim2.new(0.5, -320, 0.5, -230)
 MainFrame.BackgroundColor3 = DarkBg
+MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 14)
+
 local MainFrameStroke = Instance.new("UIStroke", MainFrame)
 MainFrameStroke.Color = ThemeColor
+MainFrameStroke.Thickness = 1.4
+MainFrameStroke.Transparency = 0.25
+
+local UIScale = Instance.new("UIScale")
+UIScale.Scale = 1
+UIScale.Parent = MainFrame
 
 ToggleBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
 end)
 
--- Üst Bar
+-- Topbar
 local Topbar = Instance.new("Frame")
-Topbar.Size = UDim2.new(1, 0, 0, 40)
+Topbar.Size = UDim2.new(1, 0, 0, 44)
 Topbar.BackgroundColor3 = PanelBg
+Topbar.BorderSizePixel = 0
 Topbar.Parent = MainFrame
-Instance.new("UICorner", Topbar).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", Topbar).CornerRadius = UDim.new(0, 14)
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -120, 1, 0)
-Title.Position = UDim2.new(0, 15, 0, 0)
+Title.Size = UDim2.new(1, -110, 1, 0)
+Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Noyan X MM2  ·  🔥 Ultimate  ·  aslan_nqy"
+Title.Text = "🌑 DARK MOON  ·  v1.0  ·  biyxznd"
 Title.TextColor3 = ThemeColor
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 12
@@ -200,36 +255,37 @@ Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Topbar
 
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 26, 0, 26)
-CloseBtn.Position = UDim2.new(1, -32, 0.5, -13)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position = UDim2.new(1, -36, 0.5, -14)
+CloseBtn.BackgroundColor3 = MoonColors.CardBg
 CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+CloseBtn.TextColor3 = Color3.fromRGB(255, 115, 130)
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextSize = 11
 CloseBtn.Parent = Topbar
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-CloseBtn.MouseButton1Click:Connect(function() _G.NoyanMM2Cleanup() end)
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
+CloseBtn.MouseButton1Click:Connect(function() _G.DarkMoonMM2Cleanup() end)
 
 local MinBtn = Instance.new("TextButton")
-MinBtn.Size = UDim2.new(0, 26, 0, 26)
-MinBtn.Position = UDim2.new(1, -64, 0.5, -13)
-MinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-MinBtn.Text = "🗕"
-MinBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+MinBtn.Size = UDim2.new(0, 28, 0, 28)
+MinBtn.Position = UDim2.new(1, -70, 0.5, -14)
+MinBtn.BackgroundColor3 = MoonColors.CardBg
+MinBtn.Text = "─"
+MinBtn.TextColor3 = MoonColors.TextPrimary
 MinBtn.Font = Enum.Font.GothamBold
-MinBtn.TextSize = 11
+MinBtn.TextSize = 12
 MinBtn.Parent = Topbar
-Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 8)
 MinBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false end)
 
--- Sol Menü (Sidebar)
+-- Sidebar
 local Sidebar = Instance.new("ScrollingFrame")
-Sidebar.Size = UDim2.new(0, 160, 1, -85)
-Sidebar.Position = UDim2.new(0, 0, 0, 42)
+Sidebar.Size = UDim2.new(0, 168, 1, -94)
+Sidebar.Position = UDim2.new(0, 0, 0, 46)
 Sidebar.BackgroundColor3 = PanelBg
 Sidebar.BorderSizePixel = 0
 Sidebar.ScrollBarThickness = 2
+Sidebar.ScrollBarImageColor3 = ThemeColor
 Sidebar.Parent = MainFrame
 
 local SidebarList = Instance.new("UIListLayout", Sidebar)
@@ -237,27 +293,34 @@ SidebarList.Padding = UDim.new(0, 4)
 SidebarList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 Instance.new("UIPadding", Sidebar).PaddingTop = UDim.new(0, 8)
 
--- Sol Alt Profil Kutusu
+SidebarList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Sidebar.CanvasSize = UDim2.new(0, 0, 0, SidebarList.AbsoluteContentSize.Y + 16)
+end)
+
+-- Bottom User Panel
 local UserPanel = Instance.new("Frame")
-UserPanel.Size = UDim2.new(0, 160, 0, 42)
-UserPanel.Position = UDim2.new(0, 0, 1, -42)
-UserPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+UserPanel.Size = UDim2.new(0, 168, 0, 46)
+UserPanel.Position = UDim2.new(0, 0, 1, -46)
+UserPanel.BackgroundColor3 = MoonColors.VoidBg
+UserPanel.BorderSizePixel = 0
 UserPanel.Parent = MainFrame
+Instance.new("UICorner", UserPanel).CornerRadius = UDim.new(0, 10)
 
 local UserText = Instance.new("TextLabel")
-UserText.Size = UDim2.new(1, -10, 1, 0)
-UserText.Position = UDim2.new(0, 10, 0, 0)
+UserText.Size = UDim2.new(1, -12, 1, 0)
+UserText.Position = UDim2.new(0, 12, 0, 0)
 UserText.BackgroundTransparency = 1
-UserText.Text = "Logged in:\naslan_nqy"
-UserText.TextColor3 = Color3.fromRGB(180, 180, 200)
+UserText.Text = "🌙 Logged in:\nbiyxznd"
+UserText.TextColor3 = MoonColors.TextMuted
 UserText.Font = Enum.Font.GothamBold
 UserText.TextSize = 10
 UserText.TextXAlignment = Enum.TextXAlignment.Left
 UserText.Parent = UserPanel
 
+-- Content Container
 local Container = Instance.new("Frame")
-Container.Size = UDim2.new(1, -165, 1, -42)
-Container.Position = UDim2.new(0, 165, 0, 42)
+Container.Size = UDim2.new(1, -174, 1, -48)
+Container.Position = UDim2.new(0, 174, 0, 48)
 Container.BackgroundTransparency = 1
 Container.ClipsDescendants = true
 Container.Parent = MainFrame
@@ -271,7 +334,8 @@ local function AddTab(enName, trName)
     Page.Position = UDim2.new(0, 0, 0, 0)
     Page.BackgroundTransparency = 1
     Page.BorderSizePixel = 0
-    Page.ScrollBarThickness = 4
+    Page.ScrollBarThickness = 3
+    Page.ScrollBarImageColor3 = ThemeColor
     Page.CanvasSize = UDim2.new(0, 0, 0, 0)
     Page.Visible = firstTab
     Page.Parent = PagesFolder
@@ -282,19 +346,20 @@ local function AddTab(enName, trName)
     Instance.new("UIPadding", Page).PaddingTop = UDim.new(0, 12)
 
     PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 25)
+        Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 24)
     end)
 
     local TabBtn = Instance.new("TextButton")
     TabBtn.Size = UDim2.new(0.92, 0, 0, 32)
-    TabBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
-    TabBtn.Text = string.format(" 📎  %s", enName)
-    TabBtn.TextColor3 = firstTab and ThemeColor or Color3.fromRGB(180, 180, 200)
+    TabBtn.BackgroundColor3 = MoonColors.CardBg
+    TabBtn.BorderSizePixel = 0
+    TabBtn.Text = string.format("  ☽  %s", enName)
+    TabBtn.TextColor3 = firstTab and ThemeColor or MoonColors.TextMuted
     TabBtn.Font = Enum.Font.GothamSemibold
     TabBtn.TextSize = 11
     TabBtn.TextXAlignment = Enum.TextXAlignment.Left
     TabBtn.Parent = Sidebar
-    Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 8)
 
     table.insert(C.TranslatedElements, {
         Type = "Tab",
@@ -306,64 +371,74 @@ local function AddTab(enName, trName)
     TabBtn.MouseButton1Click:Connect(function()
         for _, p in pairs(PagesFolder:GetChildren()) do p.Visible = false end
         for _, b in pairs(Sidebar:GetChildren()) do
-            if b:IsA("TextButton") then b.TextColor3 = Color3.fromRGB(180, 180, 200) end
+            if b:IsA("TextButton") then b.TextColor3 = MoonColors.TextMuted end
         end
         Page.Visible = true
         TabBtn.TextColor3 = ThemeColor
     end)
-    
+
     firstTab = false
 
     local Tab = {}
     function Tab:AddToggle(enTitle, trTitle, default, callback)
         local state = default
         local TBtn = Instance.new("TextButton")
-        TBtn.Size = UDim2.new(0.92, 0, 0, 36)
-        TBtn.BackgroundColor3 = PanelBg
-        TBtn.Text = "  " .. enTitle
-        TBtn.TextColor3 = state and ThemeColor or Color3.fromRGB(200, 200, 220)
+        TBtn.Size = UDim2.new(0.94, 0, 0, 38)
+        TBtn.BackgroundColor3 = MoonColors.CardBg
+        TBtn.BorderSizePixel = 0
+        TBtn.Text = (state and "  [ON]  " or "  [OFF] ") .. enTitle
+        TBtn.TextColor3 = state and ThemeColor or MoonColors.TextPrimary
         TBtn.Font = Enum.Font.GothamSemibold
         TBtn.TextSize = 11
         TBtn.TextXAlignment = Enum.TextXAlignment.Left
         TBtn.Parent = Page
-        Instance.new("UICorner", TBtn).CornerRadius = UDim.new(0, 6)
-        
+        Instance.new("UICorner", TBtn).CornerRadius = UDim.new(0, 8)
+
         local Stroke = Instance.new("UIStroke", TBtn)
-        Stroke.Color = state and ThemeColor or Color3.fromRGB(40, 40, 55)
+        Stroke.Color = state and ThemeColor or MoonColors.Border
+        Stroke.Transparency = state and 0.25 or 0.5
 
         table.insert(C.TranslatedElements, {
-            Type = "Element",
+            Type = "Toggle",
             Button = TBtn,
-            EN = "  " .. enTitle,
-            TR = "  " .. trTitle
+            GetState = function() return state end,
+            EN = enTitle,
+            TR = trTitle
         })
 
         TBtn.MouseButton1Click:Connect(function()
             state = not state
-            TBtn.TextColor3 = state and ThemeColor or Color3.fromRGB(200, 200, 220)
-            Stroke.Color = state and ThemeColor or Color3.fromRGB(40, 40, 55)
+            local label = C.Language == "Turkish" and trTitle or enTitle
+            TBtn.Text = (state and "  [ON]  " or "  [OFF] ") .. label
+            TBtn.TextColor3 = state and ThemeColor or MoonColors.TextPrimary
+            Stroke.Color = state and ThemeColor or MoonColors.Border
+            Stroke.Transparency = state and 0.25 or 0.5
             pcall(callback, state)
         end)
     end
 
     function Tab:AddButton(enTitle, trTitle, callback)
         local BBtn = Instance.new("TextButton")
-        BBtn.Size = UDim2.new(0.92, 0, 0, 36)
-        BBtn.BackgroundColor3 = PanelBg
-        BBtn.Text = "  " .. enTitle
-        BBtn.TextColor3 = Color3.fromRGB(255, 200, 100)
+        BBtn.Size = UDim2.new(0.94, 0, 0, 38)
+        BBtn.BackgroundColor3 = MoonColors.CardBg
+        BBtn.BorderSizePixel = 0
+        BBtn.Text = "  ◈  " .. enTitle
+        BBtn.TextColor3 = Color3.fromRGB(190, 210, 255)
         BBtn.Font = Enum.Font.GothamSemibold
         BBtn.TextSize = 11
         BBtn.TextXAlignment = Enum.TextXAlignment.Left
         BBtn.Parent = Page
-        Instance.new("UICorner", BBtn).CornerRadius = UDim.new(0, 6)
-        Instance.new("UIStroke", BBtn).Color = Color3.fromRGB(50, 50, 70)
+        Instance.new("UICorner", BBtn).CornerRadius = UDim.new(0, 8)
+
+        local BStroke = Instance.new("UIStroke", BBtn)
+        BStroke.Color = MoonColors.Border
+        BStroke.Transparency = 0.45
 
         table.insert(C.TranslatedElements, {
-            Type = "Element",
+            Type = "Button",
             Button = BBtn,
-            EN = "  " .. enTitle,
-            TR = "  " .. trTitle
+            EN = enTitle,
+            TR = trTitle
         })
 
         BBtn.MouseButton1Click:Connect(function()
@@ -374,7 +449,35 @@ local function AddTab(enName, trName)
     return Tab
 end
 
--- Kategoriler
+-- Helper to send chat safely across chat versions
+local function sendChatNotification(msg)
+    pcall(function()
+        local legacyChat = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if legacyChat and legacyChat:FindFirstChild("SayMessageRequest") then
+            legacyChat.SayMessageRequest:FireServer(msg, "All")
+        elseif TextChatService and TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            local channels = TextChatService:FindFirstChild("TextChannels")
+            local general = channels and channels:FindFirstChild("RBXGeneral")
+            if general then
+                general:SendAsync(msg)
+            end
+        end
+    end)
+end
+
+-- Single Auto-Blink listener registered once in C.Connections
+trackConn(UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and C.AutoBlink and input.KeyCode == Enum.KeyCode.Q then
+        pcall(function()
+            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = hrp.CFrame + (hrp.CFrame.LookVector * 25)
+            end
+        end)
+    end
+end))
+
+-- Tabs
 local TabInnocent = AddTab("Innocent", "Masum")
 local TabSheriff = AddTab("Sheriff", "Şerif")
 local TabMurder = AddTab("Murderer", "Katil")
@@ -384,10 +487,11 @@ local TabTeleport = AddTab("Teleport", "Işınlanma")
 local TabPlayer = AddTab("Player", "Karakter")
 local TabTroll = AddTab("God-Fling", "God-Fling")
 local TabVisuals = AddTab("Visuals", "Görseller")
-local TabFrame = AddTab("Frame", "Çerçeve")
+local TabUIAdjust = AddTab("UI Adjust", "UI Ayarları")
+local TabFrame = AddTab("Moon Accent", "Ay Teması")
 local TabSettings = AddTab("Settings", "Ayarlar")
 
--- 1. MASUM (ZENGİNLEŞTİRİLDİ)
+-- 1. INNOCENT
 TabInnocent:AddToggle("Auto Grab & Return Gun", "Silahı Otomatik Al ve Geri Ver", false, function(state)
     C.AutoGrabAndReturnGun = state
     task.spawn(function()
@@ -423,8 +527,7 @@ TabInnocent:AddToggle("Auto Alert Sheriff Location", "Katil Yakınlaşınca Şer
                             if (bp and bp:FindFirstChild("Knife")) or pChar:FindFirstChild("Knife") then
                                 local mHrp = pChar:FindFirstChild("HumanoidRootPart")
                                 if mHrp and (hrp.Position - mHrp.Position).Magnitude < 30 then
-                                    local args = { [1] = "[NoyanX] MURDERER IS NEAR ME!", [2] = "All" }
-                                    ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(unpack(args))
+                                    sendChatNotification("[DARK MOON] MURDERER IS NEAR ME!")
                                     task.wait(5)
                                 end
                             end
@@ -438,16 +541,6 @@ end)
 
 TabInnocent:AddToggle("Auto-Blink Escape (Press Q)", "Blink Yeteneği ile Kaçış (Q Tuşu)", false, function(state)
     C.AutoBlink = state
-    UserInputService.InputBegan:Connect(function(input, gpe)
-        if not gpe and C.AutoBlink and input.KeyCode == Enum.KeyCode.Q then
-            pcall(function()
-                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    hrp.CFrame = hrp.CFrame + (hrp.CFrame.LookVector * 25)
-                end
-            end)
-        end
-    end)
 end)
 
 TabInnocent:AddButton("Fake Dead (Drop to Ground)", "Ölü Taklidi Yap (Yere Yat)", function()
@@ -475,7 +568,7 @@ TabInnocent:AddButton("Teleport to Safe Platform", "Güvenli Yüksek Platforma I
     end)
 end)
 
--- 2. ŞERİF (ZENGİNLEŞTİRİLDİ)
+-- 2. SHERIFF
 TabSheriff:AddToggle("Wallbang Gun", "Duvar Arkasından Vurma", false, function(state)
     C.WallbangGun = state
     task.spawn(function()
@@ -500,8 +593,8 @@ TabSheriff:AddToggle("Gun Silent Aim (Auto Shoot Murderer)", "Silent Aim (Katile
             pcall(function()
                 local char = LocalPlayer.Character
                 local gun = char and char:FindFirstChild("Gun") or (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Gun"))
-                if gun then
-                    if gun.Parent == LocalPlayer.Backpack then LocalPlayer.Character.Humanoid:EquipTool(gun) end
+                if gun and char and char:FindFirstChild("Humanoid") then
+                    if gun.Parent == LocalPlayer.Backpack then char.Humanoid:EquipTool(gun) end
                     for _, p in pairs(Players:GetPlayers()) do
                         if p ~= LocalPlayer and p.Character then
                             local bp = p:FindFirstChild("Backpack")
@@ -509,7 +602,7 @@ TabSheriff:AddToggle("Gun Silent Aim (Auto Shoot Murderer)", "Silent Aim (Katile
                             if (bp and bp:FindFirstChild("Knife")) or pChar:FindFirstChild("Knife") then
                                 local targetHrp = pChar:FindFirstChild("HumanoidRootPart")
                                 if targetHrp then
-                                    Camera.CameraSubject = targetHrp
+                                    Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetHrp.Position)
                                     gun:Activate()
                                 end
                             end
@@ -529,8 +622,8 @@ TabSheriff:AddToggle("Gun Aura (Instant Kill Murderer near you)", "Silah Aura (Y
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 local gun = char and char:FindFirstChild("Gun") or (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Gun"))
-                if hrp and gun then
-                    if gun.Parent == LocalPlayer.Backpack then LocalPlayer.Character.Humanoid:EquipTool(gun) end
+                if hrp and gun and char:FindFirstChild("Humanoid") then
+                    if gun.Parent == LocalPlayer.Backpack then char.Humanoid:EquipTool(gun) end
                     for _, p in pairs(Players:GetPlayers()) do
                         if p ~= LocalPlayer and p.Character then
                             local bp = p:FindFirstChild("Backpack")
@@ -567,10 +660,11 @@ TabSheriff:AddToggle("Auto-Save Gun Drop", "Yere Düşen Silahı Anında Kapan O
     end)
 end)
 
-TabSheriff:AddButton("Instant Equip Gun", "Silahı Anında Elə Çek", function()
+TabSheriff:AddButton("Instant Equip Gun", "Silahı Anında Ele Çek", function()
     pcall(function()
-        local gun = LocalPlayer.Backpack:FindFirstChild("Gun")
-        if gun then LocalPlayer.Character.Humanoid:EquipTool(gun) end
+        local gun = LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Gun")
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if gun and hum then hum:EquipTool(gun) end
     end)
 end)
 
@@ -587,7 +681,7 @@ TabSheriff:AddButton("Teleport to Dropped Gun", "Düşen Silahın Yanına Işın
     end)
 end)
 
--- 3. KATİL (ZENGİNLEŞTİRİLDİ)
+-- 3. MURDERER
 TabMurder:AddToggle("Pull All to Front & Slash", "Herkesi Önüne Çek ve Kes", false, function(state)
     C.PullAllToFront = state
     task.spawn(function()
@@ -595,9 +689,10 @@ TabMurder:AddToggle("Pull All to Front & Slash", "Herkesi Önüne Çek ve Kes", 
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChild("Humanoid")
                 local knife = char and char:FindFirstChild("Knife") or (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Knife"))
-                if hrp and knife then
-                    if knife.Parent == LocalPlayer.Backpack then LocalPlayer.Character.Humanoid:EquipTool(knife) end
+                if hrp and hum and knife then
+                    if knife.Parent == LocalPlayer.Backpack then hum:EquipTool(knife) end
                     for _, p in pairs(Players:GetPlayers()) do
                         if p ~= LocalPlayer and p.Character then
                             local enemyHrp = p.Character:FindFirstChild("HumanoidRootPart")
@@ -621,9 +716,10 @@ TabMurder:AddToggle("Kill Aura", "Kill Aura (Yakındakileri Kes)", false, functi
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChild("Humanoid")
                 local knife = char and char:FindFirstChild("Knife") or (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Knife"))
-                if hrp and knife then
-                    if knife.Parent == LocalPlayer.Backpack then LocalPlayer.Character.Humanoid:EquipTool(knife) end
+                if hrp and hum and knife then
+                    if knife.Parent == LocalPlayer.Backpack then hum:EquipTool(knife) end
                     for _, p in pairs(Players:GetPlayers()) do
                         if p ~= LocalPlayer and p.Character then
                             local enemyHrp = p.Character:FindFirstChild("HumanoidRootPart")
@@ -685,10 +781,11 @@ TabMurder:AddToggle("Auto Knife Throw Aura", "Otomatik Uzaktan Bıçak Fırlatma
     end)
 end)
 
-TabMurder:AddButton("Instant Equip Knife", "Bıçağı Anında Elə Çek", function()
+TabMurder:AddButton("Instant Equip Knife", "Bıçağı Anında Ele Çek", function()
     pcall(function()
-        local knife = LocalPlayer.Backpack:FindFirstChild("Knife")
-        if knife then LocalPlayer.Character.Humanoid:EquipTool(knife) end
+        local knife = LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Knife")
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        if knife and hum then hum:EquipTool(knife) end
     end)
 end)
 
@@ -720,10 +817,10 @@ TabFarm:AddToggle("Smooth Coin Farm (AFK)", "Akıcı Coin Toplama (AFK)", false,
                         if not C.SmoothCoinFarm then break end
                         if obj:IsA("BasePart") then
                             local nameLower = obj.Name:lower()
-                            if nameLower:find("coin") or nameLower:find("valut") or obj.BrickColor == BrickColor.new("Bright yellow") then
+                            if nameLower:find("coin") or nameLower:find("vault") or obj.BrickColor == BrickColor.new("Bright yellow") then
                                 local dist = (hrp.Position - obj.Position).Magnitude
                                 if dist < 120 and obj.Transparency == 0 then
-                                    local info = TweenInfo.new(dist / 25, Enum.EasingStyle.Linear)
+                                    local info = TweenInfo.new(math.max(dist / 25, 0.08), Enum.EasingStyle.Linear)
                                     local tween = TweenService:Create(hrp, info, {CFrame = obj.CFrame + Vector3.new(0, 1, 0)})
                                     tween:Play()
                                     while tween.PlaybackState == Enum.PlaybackState.Playing and C.SmoothCoinFarm do task.wait(0.05) end
@@ -759,7 +856,7 @@ TabFarm:AddToggle("Coin Magnet (Pull Coins to You)", "Coin Mıknatısı (Coinler
     end)
 end)
 
--- 5. XP & SEVİYE
+-- 5. XP & LEVEL
 TabXPFarm:AddToggle("Top Map AFK XP Farm", "Harita Tepesinde AFK XP Kasma", false, function(state)
     C.TopXPFarm = state
     task.spawn(function()
@@ -777,7 +874,7 @@ TabXPFarm:AddToggle("Top Map AFK XP Farm", "Harita Tepesinde AFK XP Kasma", fals
     end)
 end)
 
--- 6. IŞINLANMA
+-- 6. TELEPORT
 TabTeleport:AddButton("Teleport to Map Center", "Harita Merkezine Işınlan", function()
     pcall(function()
         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -792,7 +889,7 @@ TabTeleport:AddButton("Teleport to Lobby", "Lobiye Dön", function()
     end)
 end)
 
--- 7. KARAKTER
+-- 7. PLAYER
 TabPlayer:AddToggle("WalkSpeed (Speed Hack)", "Koşma Hızı (Speed Hack)", false, function(state)
     local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
     if hum then hum.WalkSpeed = state and 32 or 16 end
@@ -832,17 +929,17 @@ TabPlayer:AddToggle("Anti-Fling Shield", "Anti-Fling Kalkanı", false, function(
     end)
 end)
 
--- 8. GOD-FLING MOTORU
+-- 8. GOD-FLING
 local function executeInstantFling(targetChar)
     pcall(function()
         local localChar = LocalPlayer.Character
         local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
         local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
         local localHum = localChar and localChar:FindFirstChild("Humanoid")
-        
+
         if localHrp and targetHrp and localHum then
             local originalPos = localHrp.CFrame
-            
+
             for _, part in pairs(localChar:GetDescendants()) do
                 if part:IsA("BasePart") then
                     part.CustomPhysicalProperties = PhysicalProperties.new(100, 0, 0, 100, 100)
@@ -853,7 +950,7 @@ local function executeInstantFling(targetChar)
             connection = RunService.Heartbeat:Connect(function()
                 pcall(function()
                     if targetHrp and localHrp then
-                        localHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, 0)
+                        localHrp.CFrame = targetHrp.CFrame
                         localHrp.AssemblyLinearVelocity = Vector3.new(30000, 30000, 30000)
                         localHrp.AssemblyAngularVelocity = Vector3.new(99999, 99999, 99999)
                         targetHrp.AssemblyLinearVelocity = Vector3.new(math.random(-10000, 10000), 100000, math.random(-10000, 10000))
@@ -863,7 +960,7 @@ local function executeInstantFling(targetChar)
 
             task.wait(0.25)
             if connection then connection:Disconnect() end
-            
+
             localHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             localHrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             localHrp.CFrame = originalPos
@@ -933,11 +1030,11 @@ TabTroll:AddToggle("Public Spinbot", "Herkesi Döndür (Spinbot)", false, functi
     end)
 end)
 
--- 9. GÖRSEL (VISUALS)
-TabVisuals:AddToggle("Murderer ESP (🟥)", "Katil ESP (🟥)", true, function(state) C.RoleFilter.Murderer = state end)
-TabVisuals:AddToggle("Sheriff ESP (🟦)", "Şerif ESP (🟦)", true, function(state) C.RoleFilter.Sheriff = state end)
-TabVisuals:AddToggle("Hero ESP (🟡)", "Kahraman ESP (🟡)", true, function(state) C.RoleFilter.Hero = state end)
-TabVisuals:AddToggle("Innocent ESP (🟩)", "Masum ESP (🟩)", true, function(state) C.RoleFilter.Innocent = state end)
+-- 9. VISUALS
+TabVisuals:AddToggle("Murderer ESP", "Katil ESP", true, function(state) C.RoleFilter.Murderer = state end)
+TabVisuals:AddToggle("Sheriff ESP", "Şerif ESP", true, function(state) C.RoleFilter.Sheriff = state end)
+TabVisuals:AddToggle("Hero ESP", "Kahraman ESP", true, function(state) C.RoleFilter.Hero = state end)
+TabVisuals:AddToggle("Innocent ESP", "Masum ESP", true, function(state) C.RoleFilter.Innocent = state end)
 TabVisuals:AddToggle("Gun Drop ESP", "Yere Düşen Silah ESP", true, function(state) C.GunESP = state end)
 TabVisuals:AddToggle("Name & Distance ESP", "İsim & Mesafe ESP", false, function(state) C.NameESP = state end)
 
@@ -958,59 +1055,110 @@ end)
 TabVisuals:AddButton("Set FOV to 120", "Görüş Açısını (FOV) 120 Yap", function() Camera.FieldOfView = 120 end)
 TabVisuals:AddButton("Reset FOV to Default", "Görüş Açısını (FOV) Sıfırla", function() Camera.FieldOfView = 70 end)
 
--- 10. ÇERÇEVE RENK SEÇENEKLERİ
-TabFrame:AddButton("Cyan Theme (Default)", "Camgöbeği Tema", function()
-    MainFrameStroke.Color = Color3.fromRGB(0, 255, 204)
-    ToggleBtnStroke.Color = Color3.fromRGB(0, 255, 204)
-    ToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 204)
+-- 10. UI ADJUST SYSTEM
+local function applyUIScale(scaleVal, modeLabel)
+    C.UIScaleMode = modeLabel
+    TweenService:Create(UIScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Scale = scaleVal}):Play()
+end
+
+local function applyUITransparency(bgTransp, panelTransp)
+    MainFrame.BackgroundTransparency = bgTransp
+    Topbar.BackgroundTransparency = panelTransp
+    Sidebar.BackgroundTransparency = panelTransp
+    UserPanel.BackgroundTransparency = bgTransp
+    for _, child in ipairs(PagesFolder:GetChildren()) do
+        if child:IsA("ScrollingFrame") then
+            for _, item in ipairs(child:GetChildren()) do
+                if item:IsA("TextButton") then
+                    item.BackgroundTransparency = panelTransp
+                end
+            end
+        end
+    end
+end
+
+TabUIAdjust:AddButton("Scale: Compact (0.88x)", "Boyut: Küçük (0.88x)", function()
+    applyUIScale(0.88, "Compact")
+end)
+TabUIAdjust:AddButton("Scale: Standard (1.00x)", "Boyut: Standart (1.00x)", function()
+    applyUIScale(1.0, "Standard")
+end)
+TabUIAdjust:AddButton("Scale: Large (1.15x)", "Boyut: Büyük (1.15x)", function()
+    applyUIScale(1.15, "Large")
+end)
+TabUIAdjust:AddButton("Opacity: Solid Dark Moon", "Opaklık: Tam Koyu Ay", function()
+    applyUITransparency(0, 0)
+end)
+TabUIAdjust:AddButton("Opacity: Translucent Eclipse", "Opaklık: Yarı Saydam Tutulma", function()
+    applyUITransparency(0.18, 0.24)
+end)
+TabUIAdjust:AddButton("Center Window Position", "Pencereyi Ortala", function()
+    MainFrame.Position = UDim2.new(0.5, -320, 0.5, -230)
+    ToggleBtn.Position = UDim2.new(0, 20, 0.38, 0)
 end)
 
-TabFrame:AddButton("Purple Theme", "Mor Tema", function()
-    MainFrameStroke.Color = Color3.fromRGB(180, 0, 255)
-    ToggleBtnStroke.Color = Color3.fromRGB(180, 0, 255)
-    ToggleBtn.TextColor3 = Color3.fromRGB(180, 0, 255)
+-- 11. MOON ACCENT THEMES
+local function applyAccentColor(col)
+    ThemeColor = col
+    MainFrameStroke.Color = col
+    ToggleBtnStroke.Color = col
+    ToggleBtn.TextColor3 = col
+    Title.TextColor3 = col
+    LoadTitle.TextColor3 = col
+    LoadStroke.Color = col
+    LoadBarFill.BackgroundColor3 = col
+    Sidebar.ScrollBarImageColor3 = col
+
+    for _, page in ipairs(PagesFolder:GetChildren()) do
+        if page:IsA("ScrollingFrame") then
+            page.ScrollBarImageColor3 = col
+        end
+    end
+    for _, b in ipairs(Sidebar:GetChildren()) do
+        if b:IsA("TextButton") and b.TextColor3 ~= MoonColors.TextMuted then
+            b.TextColor3 = col
+        end
+    end
+end
+
+TabFrame:AddButton("Lunar Ice (Default Dark Moon)", "Ay Buzulu (Varsayılan Koyu Ay)", function()
+    applyAccentColor(Color3.fromRGB(150, 190, 255))
+end)
+TabFrame:AddButton("Eclipse Violet", "Tutulma Moru", function()
+    applyAccentColor(Color3.fromRGB(155, 115, 255))
+end)
+TabFrame:AddButton("Blood Moon Crimson", "Kanlı Ay Kırmızısı", function()
+    applyAccentColor(Color3.fromRGB(255, 85, 110))
+end)
+TabFrame:AddButton("Supermoon Gold", "Süper Ay Altını", function()
+    applyAccentColor(Color3.fromRGB(255, 210, 110))
 end)
 
-TabFrame:AddButton("Red Theme", "Kırmızı Tema", function()
-    MainFrameStroke.Color = Color3.fromRGB(255, 50, 50)
-    ToggleBtnStroke.Color = Color3.fromRGB(255, 50, 50)
-    ToggleBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
-end)
-
-TabFrame:AddButton("Gold Theme", "Altın Sarısı Tema", function()
-    MainFrameStroke.Color = Color3.fromRGB(255, 215, 0)
-    ToggleBtnStroke.Color = Color3.fromRGB(255, 215, 0)
-    ToggleBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
-end)
-
--- 11. AYARLAR & DİL
+-- 12. LANGUAGE & SETTINGS
 local function updateLanguage(lang)
     C.Language = lang
     for _, item in ipairs(C.TranslatedElements) do
+        local textVal = item[lang == "Turkish" and "TR" or "EN"]
         if item.Type == "Tab" then
-            item.Button.Text = string.format(" 📎  %s", item[lang == "Turkish" and "TR" or "EN"])
-        elseif item.Type == "Element" then
-            item.Button.Text = item[lang == "Turkish" and "TR" or "EN"]
+            item.Button.Text = string.format("  ☽  %s", textVal)
+        elseif item.Type == "Toggle" then
+            local isOn = item.GetState and item.GetState()
+            item.Button.Text = (isOn and "  [ON]  " or "  [OFF] ") .. textVal
+        elseif item.Type == "Button" then
+            item.Button.Text = "  ◈  " .. textVal
         end
     end
     if lang == "Turkish" then
-        Title.Text = "Noyan X MM2  ·  🔥 Ultimate  ·  aslan_nqy [TR]"
+        Title.Text = "🌑 DARK MOON  ·  v1.0  ·  biyxznd [TR]"
     else
-        Title.Text = "Noyan X MM2  ·  🔥 Ultimate  ·  aslan_nqy"
+        Title.Text = "🌑 DARK MOON  ·  v1.0  ·  biyxznd"
     end
 end
 
 TabSettings:AddButton("Dil: Türkçe", "Dil: Türkçe", function() updateLanguage("Turkish") end)
 TabSettings:AddButton("Language: English", "Language: English", function() updateLanguage("English") end)
 
--- CHAT / ROL SİSTEMİ
-local function sendChatNotification(msg)
-    pcall(function()
-        local args = { [1] = msg, [2] = "All" }
-        ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(unpack(args))
-    end)
-end
-
+-- CHAT ROLE ANNOUNCER
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -1018,18 +1166,18 @@ task.spawn(function()
                 if p.Character then
                     local char = p.Character
                     local bp = p:FindFirstChild("Backpack")
-                    
+
                     if (bp and bp:FindFirstChild("Knife")) or char:FindFirstChild("Knife") then
                         if not C.AnnouncedKillers[p] then
                             C.AnnouncedKillers[p] = true
-                            sendChatNotification(string.format("murderer: %s ⟪Noyan X MM2 ⟫", p.Name))
+                            sendChatNotification(string.format("murderer: %s ⟪DARK MOON v1.0⟫", p.Name))
                         end
                     end
-                    
+
                     if (bp and bp:FindFirstChild("Gun")) or char:FindFirstChild("Gun") then
                         if not C.AnnouncedSheriffs[p] then
                             C.AnnouncedSheriffs[p] = true
-                            sendChatNotification(string.format("Sherriff:%s", p.Name))
+                            sendChatNotification(string.format("Sheriff: %s", p.Name))
                         end
                     end
                 end
@@ -1038,7 +1186,7 @@ task.spawn(function()
     end
 end)
 
--- ESP & DÖNGÜLER
+-- ESP & HIGHLIGHTS LOOP
 task.spawn(function()
     while task.wait(0.4) do
         pcall(function()
@@ -1047,7 +1195,7 @@ task.spawn(function()
                     local char = p.Character
                     local bp = p:FindFirstChild("Backpack")
                     local role = "Innocent"
-                    
+
                     if (bp and bp:FindFirstChild("Knife")) or char:FindFirstChild("Knife") then
                         role = "Murderer"
                     elseif (bp and bp:FindFirstChild("Gun")) or char:FindFirstChild("Gun") then
@@ -1055,9 +1203,9 @@ task.spawn(function()
                     end
 
                     local shouldShow = C.RoleFilter[role]
-                    local targetColor = Color3.fromRGB(0, 255, 0)
-                    if role == "Murderer" then targetColor = Color3.fromRGB(255, 0, 0)
-                    elseif role == "Sheriff" then targetColor = Color3.fromRGB(0, 120, 255)
+                    local targetColor = Color3.fromRGB(0, 255, 130)
+                    if role == "Murderer" then targetColor = Color3.fromRGB(255, 55, 85)
+                    elseif role == "Sheriff" then targetColor = Color3.fromRGB(80, 165, 255)
                     elseif role == "Hero" then targetColor = Color3.fromRGB(255, 215, 0) end
 
                     local hl = C.Highlights[p]
@@ -1065,13 +1213,13 @@ task.spawn(function()
                         if not hl or hl.Parent ~= char then
                             if hl then hl:Destroy() end
                             hl = Instance.new("Highlight")
-                            hl.Name = "NoyanX_RoleHighlight"
+                            hl.Name = "DarkMoon_RoleHighlight"
                             hl.Adornee = char
                             hl.Parent = char
                             C.Highlights[p] = hl
                         end
                         hl.FillColor = targetColor
-                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        hl.OutlineColor = Color3.fromRGB(235, 242, 255)
                         hl.FillTransparency = 0.3
                         hl.OutlineTransparency = 0
                     else
@@ -1084,7 +1232,7 @@ task.spawn(function()
                         if not tag or tag.Adornee ~= head then
                             if tag then tag:Destroy() end
                             tag = Instance.new("BillboardGui")
-                            tag.Name = "NoyanX_NameTag"
+                            tag.Name = "DarkMoon_NameTag"
                             tag.Size = UDim2.new(0, 200, 0, 50)
                             tag.StudsOffset = Vector3.new(0, 2.5, 0)
                             tag.AlwaysOnTop = true
@@ -1102,11 +1250,11 @@ task.spawn(function()
                             txt.Parent = tag
                             C.NameTags[p] = tag
                         end
-                        
+
                         local lHrp = LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         local pHrp = char:FindFirstChild("HumanoidRootPart")
                         local dist = (lHrp and pHrp) and math.floor((lHrp.Position - pHrp.Position).Magnitude) or 0
-                        
+
                         local txtLabel = tag:FindFirstChild("Text")
                         if txtLabel then
                             txtLabel.Text = string.format("%s\n[%d studs] - (%s)", p.Name, dist, role)
@@ -1125,9 +1273,9 @@ task.spawn(function()
                         if not ghl or ghl.Adornee ~= obj then
                             if ghl then ghl:Destroy() end
                             ghl = Instance.new("Highlight")
-                            ghl.Name = "NoyanX_GunHighlight"
+                            ghl.Name = "DarkMoon_GunHighlight"
                             ghl.Adornee = obj
-                            ghl.FillColor = Color3.fromRGB(0, 150, 255)
+                            ghl.FillColor = Color3.fromRGB(130, 185, 255)
                             ghl.OutlineColor = Color3.fromRGB(255, 255, 255)
                             ghl.FillTransparency = 0.2
                             ghl.Parent = obj
@@ -1142,4 +1290,4 @@ task.spawn(function()
     end
 end)
 
-print("[NOYAN X MM2] v15.0 Ultimate Edition Yüklendi! (Kullanıcı: aslan_nqy)")
+print("[DARK MOON] v1.0 Loaded! (User: biyxznd)")
