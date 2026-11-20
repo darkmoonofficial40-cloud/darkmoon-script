@@ -5,7 +5,7 @@
 -- By biyxznd
 -- Discord: https://discord.gg/QxRKp
 
--- Movement + Teleport + Troll + ESP + Misc + Settings
+-- Movement + Teleport + Troll + Visual + Combat + Misc + Settings
 
 -- RIGHT SHIFT = Open / Close Menu
 
@@ -634,7 +634,7 @@ local function Main()
 
     -- Use plain ASCII monograms instead of Unicode symbols/emoji.
     -- Some Roblox executor fonts do not include those glyphs and render them as squares.
-    local tabIcons={Movement="M",Teleport="TP",Troll="TR",ESP="ESP",Misc="MX",Settings="S"}
+    local tabIcons={Movement="M",Teleport="TP",Troll="TR",Visual="V",Combat="CB",Misc="MX",Settings="S"}
 
     local activePage="Movement"
     local searchableRows={}
@@ -1790,13 +1790,13 @@ local function Main()
 
 
 
-    -- ESP*
+    -- VISUAL*
 
-    local espTab=newTab("ESP",4)
+    local visualTab=newTab("Visual",4)
 
-    local espLeft=column(espTab,0,0.5,"Visuals")
+    local visualLeft=column(visualTab,0,0.5,"Visuals")
 
-    local espRight=column(espTab,0.5,0.5,"Options")
+    local visualRight=column(visualTab,0.5,0.5,"Options")
 
 
 
@@ -1878,12 +1878,12 @@ local function Main()
         end
     end
 
-    toggleRow(espLeft,1,"Box ESP 2D","2D bounding box around players",nil,function(v)
+    toggleRow(visualLeft,1,"ESP","2D bounding box around players",nil,function(v)
         boxEspOn=v
         if not v then
             clearBoxEsp()
         end
-        setStatus(v and "BOX ESP 2D ON" or "BOX ESP 2D OFF")
+        setStatus(v and "ESP ON" or "ESP OFF")
     end)
 
     Players.PlayerRemoving:Connect(function(p)
@@ -1892,9 +1892,98 @@ local function Main()
 
 
 
+    -- COMBAT*
+
+    local combatTab=newTab("Combat",5)
+
+    local combatLeft=column(combatTab,0,0.5,"Aiming")
+
+    local combatRight=column(combatTab,0.5,0.5,"Targeting")
+
+
+
+    local aimbotOn=false
+    local aimlockOn=false
+    local aimbotSmoothness=6
+    local aimHeadPart=true
+    local rmbHeld=false
+
+    local function getClosestTargetPart()
+        local cam=workspace.CurrentCamera
+        if not cam then return nil end
+        local center=Vector2.new(cam.ViewportSize.X*0.5,cam.ViewportSize.Y*0.5)
+        local bestPart=nil
+        local bestDist=math.huge
+
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p~=player and p.Character then
+                local hum=p.Character:FindFirstChildOfClass("Humanoid")
+                local part=aimHeadPart and (p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart"))
+                    or (p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Head"))
+                if hum and hum.Health>0 and part then
+                    local screenPos,onScreen=cam:WorldToViewportPoint(part.Position)
+                    if onScreen and screenPos.Z>0 then
+                        local dist=(Vector2.new(screenPos.X,screenPos.Y)-center).Magnitude
+                        if dist<bestDist then
+                            bestDist=dist
+                            bestPart=part
+                        end
+                    end
+                end
+            end
+        end
+
+        return bestPart
+    end
+
+    local function aimCameraAt(part,smoothAlpha)
+        local cam=workspace.CurrentCamera
+        if not cam or not part then return end
+        local goalCFrame=CFrame.new(cam.CFrame.Position,part.Position)
+        if smoothAlpha and smoothAlpha<1 then
+            cam.CFrame=cam.CFrame:Lerp(goalCFrame,smoothAlpha)
+        else
+            cam.CFrame=goalCFrame
+        end
+    end
+
+    toggleRow(combatLeft,1,"Aimbot","Hold Right Click to aim at nearest player",nil,function(v)
+        aimbotOn=v
+        setStatus(v and "AIMBOT ON" or "AIMBOT OFF")
+    end)
+
+    sliderRow(combatLeft,2,"Aimbot Smoothness",1,20,6,"",function(v)
+        aimbotSmoothness=v
+    end)
+
+    toggleRow(combatRight,1,"Aimlock","Lock camera onto nearest player",nil,function(v)
+        aimlockOn=v
+        setStatus(v and "AIMLOCK ON" or "AIMLOCK OFF")
+    end)
+
+    toggleRow(combatRight,2,"Target Head","Off targets HumanoidRootPart",nil,function(v)
+        aimHeadPart=v
+        setStatus(v and "TARGET: HEAD" or "TARGET: ROOT")
+    end)
+
+    UIS.InputBegan:Connect(function(input,processed)
+        if processed then return end
+        if input.UserInputType==Enum.UserInputType.MouseButton2 then
+            rmbHeld=true
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton2 then
+            rmbHeld=false
+        end
+    end)
+
+
+
     -- MISC*
 
-    local miscTab=newTab("Misc",5)
+    local miscTab=newTab("Misc",6)
 
     local miscLeft=column(miscTab,0,0.5,"Utilities")
 
@@ -2132,7 +2221,7 @@ local function Main()
 
     -- SETTINGS*
 
-    local settingsTab=newTab("Settings",6)
+    local settingsTab=newTab("Settings",7)
 
     local settingsLeft=column(settingsTab,0,0.5,"CUSTOMIZE COLOURS")
 
@@ -2467,6 +2556,10 @@ local function Main()
 
         end
 
+        aimbotOn=false
+
+        aimlockOn=false
+
         workspace.Gravity=origGravity
 
         clearHighlights()
@@ -2605,9 +2698,29 @@ local function Main()
 
 
 
-    RunService.RenderStepped:Connect(function()
+    RunService.RenderStepped:Connect(function(dt)
 
         updateBoxEsp()
+
+        if aimlockOn then
+
+            local part=getClosestTargetPart()
+
+            if part then aimCameraAt(part,1) end
+
+        elseif aimbotOn and rmbHeld then
+
+            local part=getClosestTargetPart()
+
+            if part then
+
+                local alpha=math.clamp((dt or 0.016)*(22-aimbotSmoothness),0.05,1)
+
+                aimCameraAt(part,alpha)
+
+            end
+
+        end
 
         if fullbrightOn then
 
