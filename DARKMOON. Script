@@ -3,7 +3,7 @@
 ]]
 -- DARK MOON V 1.2
 -- By biyxznd
--- Discord: https://discord.gg/QxRKp
+-- Discord: https://discord.gg/QxRKp9wNeE
 
 -- Movement + Teleport + Troll + Visual + Combat + Misc + Settings
 
@@ -33,7 +33,7 @@ local function Main()
 
     local mouse = player:GetMouse()
 
-    local DISCORD_INVITE = "https://discord.gg/QxRKp"
+    local DISCORD_INVITE = "https://discord.gg/QxRKp9wNeE"
 
 
 
@@ -149,7 +149,7 @@ local function Main()
 
     local function corner(obj, radius)
 
-        make("UICorner", {CornerRadius=UDim.new(0,radius)}, obj)
+        make("UICornner", {CornerRadius=UDim.new(0,radius)}, obj)
 
     end
 
@@ -1294,7 +1294,7 @@ local function Main()
 
     local left=column(moveTab,0,0.5,"Speed & Jump")
 
-    local right=column(moveTab,0.5,0.5,"Noclip")
+    local right=column(moveTab,0.5,0.5,"Noclip & Fly")
 
 
 
@@ -1305,6 +1305,372 @@ local function Main()
     local hipOn,hipValue,origHip=false,2,2
 
     local bhopOn,infJumpEnabled,noclipOn=false,false,false
+
+    local flyOn,flySpeed=false,60
+
+    local flyJoystickOn=true
+
+    local flyBv,flyBg
+
+    local flyUpHeld,flyDownHeld=false,false
+
+    local stickVector=Vector2.zero
+
+
+
+    local joystickGui=make("Frame",{
+
+        Name="FlyJoystickPad",
+
+        Size=UDim2.fromOffset(132,164),
+
+        Position=UDim2.new(0,24,1,-196),
+
+        BackgroundColor3=C.side,
+
+        BackgroundTransparency=0.15,
+
+        BorderSizePixel=0,
+
+        Visible=false,
+
+        ZIndex=20
+
+    },gui)
+
+    corner(joystickGui,14)
+
+    outline(joystickGui)
+
+
+
+    local stickBase=make("Frame",{
+
+        Name="StickBase",
+
+        Size=UDim2.fromOffset(88,88),
+
+        Position=UDim2.new(0.5,-44,0,12),
+
+        BackgroundColor3=C.chip,
+
+        BorderSizePixel=0,
+
+        ZIndex=21
+
+    },joystickGui)
+
+    corner(stickBase,44)
+
+    outline(stickBase)
+
+
+
+    local stickKnob=make("Frame",{
+
+        Name="StickKnob",
+
+        Size=UDim2.fromOffset(36,36),
+
+        Position=UDim2.new(0.5,-18,0.5,-18),
+
+        BackgroundColor3=C.ACCENT,
+
+        BorderSizePixel=0,
+
+        ZIndex=22
+
+    },stickBase)
+
+    corner(stickKnob,18)
+
+
+
+    local stickHit=make("TextButton",{
+
+        Name="StickHit",
+
+        Size=UDim2.fromScale(1,1),
+
+        BackgroundTransparency=1,
+
+        Text="",
+
+        ZIndex=23
+
+    },stickBase)
+
+
+
+    local upBtn=make("TextButton",{
+
+        Name="FlyUp",
+
+        Size=UDim2.fromOffset(54,28),
+
+        Position=UDim2.fromOffset(10,126),
+
+        BackgroundColor3=C.row,
+
+        Text="UP",
+
+        Font=Enum.Font.GothamBold,
+
+        TextSize=11,
+
+        TextColor3=C.text,
+
+        BorderSizePixel=0,
+
+        AutoButtonColor=false,
+
+        ZIndex=22
+
+    },joystickGui)
+
+    corner(upBtn,7)
+
+    outline(upBtn)
+
+
+
+    local downBtn=make("TextButton",{
+
+        Name="FlyDown",
+
+        Size=UDim2.fromOffset(54,28),
+
+        Position=UDim2.fromOffset(68,126),
+
+        BackgroundColor3=C.row,
+
+        Text="DOWN",
+
+        Font=Enum.Font.GothamBold,
+
+        TextSize=11,
+
+        TextColor3=C.text,
+
+        BorderSizePixel=0,
+
+        AutoButtonColor=false,
+
+        ZIndex=22
+
+    },joystickGui)
+
+    corner(downBtn,7)
+
+    outline(downBtn)
+
+
+
+    local activeStickInput=nil
+
+    local function resetStick()
+
+        activeStickInput=nil
+
+        stickVector=Vector2.zero
+
+        stickKnob.Position=UDim2.new(0.5,-18,0.5,-18)
+
+    end
+
+
+
+    local function updateStickFromPos(pos)
+
+        local radius=26
+
+        local center=stickBase.AbsolutePosition+(stickBase.AbsoluteSize*0.5)
+
+        local delta=Vector2.new(pos.X-center.X,pos.Y-center.Y)
+
+        if delta.Magnitude>radius then
+
+            delta=delta.Unit*radius
+
+        end
+
+        stickVector=Vector2.new(delta.X/radius,-delta.Y/radius)
+
+        stickKnob.Position=UDim2.fromOffset(
+
+            (stickBase.AbsoluteSize.X*0.5)-18+delta.X,
+
+            (stickBase.AbsoluteSize.Y*0.5)-18+delta.Y
+
+        )
+
+    end
+
+
+
+    stickHit.InputBegan:Connect(function(input)
+
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+
+            activeStickInput=input
+
+            updateStickFromPos(input.Position)
+
+        end
+
+    end)
+
+
+
+    UIS.InputChanged:Connect(function(input)
+
+        if activeStickInput and input==activeStickInput then
+
+            if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then
+
+                updateStickFromPos(input.Position)
+
+            end
+
+        end
+
+    end)
+
+
+
+    UIS.InputEnded:Connect(function(input)
+
+        if activeStickInput and input==activeStickInput then
+
+            resetStick()
+
+        end
+
+    end)
+
+
+
+    upBtn.MouseButton1Down:Connect(function() flyUpHeld=true end)
+
+    upBtn.MouseButton1Up:Connect(function() flyUpHeld=false end)
+
+    upBtn.MouseLeave:Connect(function() flyUpHeld=false end)
+
+
+
+    downBtn.MouseButton1Down:Connect(function() flyDownHeld=true end)
+
+    downBtn.MouseButton1Up:Connect(function() flyDownHeld=false end)
+
+    downBtn.MouseLeave:Connect(function() flyDownHeld=false end)
+
+
+
+    local function refreshJoystickVisibility()
+
+        joystickGui.Visible=(flyOn and flyJoystickOn and gui.Parent~=nil)
+
+        if not joystickGui.Visible then
+
+            flyUpHeld=false
+
+            flyDownHeld=false
+
+            resetStick()
+
+        end
+
+    end
+
+
+
+    local function clearFlyRig()
+
+        if flyBv then pcall(function() flyBv:Destroy() end) flyBv=nil end
+
+        if flyBg then pcall(function() flyBg:Destroy() end) flyBg=nil end
+
+        local _,_,hum=getChar()
+
+        if hum then
+
+            pcall(function() hum.PlatformStand=false end)
+
+        end
+
+    end
+
+
+
+    local function ensureFlyRig(root,hum)
+
+        if not root or not hum then return end
+
+        if not flyBv or flyBv.Parent~=root then
+
+            if flyBv then pcall(function() flyBv:Destroy() end) end
+
+            flyBv=Instance.new("BodyVelocity")
+
+            flyBv.Name="DarkMoonFlyVelocity"
+
+            flyBv.MaxForce=Vector3.new(1e5,1e5,1e5)
+
+            flyBv.Velocity=Vector3.zero
+
+            flyBv.Parent=root
+
+        end
+
+        if not flyBg or flyBg.Parent~=root then
+
+            if flyBg then pcall(function() flyBg:Destroy() end) end
+
+            flyBg=Instance.new("BodyGyro")
+
+            flyBg.Name="DarkMoonFlyGyro"
+
+            flyBg.MaxTorque=Vector3.new(1e5,1e5,1e5)
+
+            flyBg.P=3000
+
+            flyBg.D=150
+
+            flyBg.CFrame=root.CFrame
+
+            flyBg.Parent=root
+
+        end
+
+        pcall(function() hum.PlatformStand=true end)
+
+    end
+
+
+
+    local function setFlyState(v)
+
+        flyOn=v
+
+        if v then
+
+            local _,root,hum=getChar()
+
+            ensureFlyRig(root,hum)
+
+            setStatus("FLY ON")
+
+        else
+
+            clearFlyRig()
+
+            setStatus("FLY OFF")
+
+        end
+
+        refreshJoystickVisibility()
+
+    end
 
 
 
@@ -1392,7 +1758,7 @@ local function Main()
 
     UIS.JumpRequest:Connect(function()
 
-        if infJumpEnabled then
+        if infJumpEnabled and not flyOn then
 
             local _,_,hum=getChar()
 
@@ -1414,9 +1780,35 @@ local function Main()
 
 
 
+    toggleRow(right,2,"Fly","PC & mobile flight with joystick",Enum.KeyCode.F,function(v)
+
+        setFlyState(v)
+
+    end)
+
+
+
+    sliderRow(right,3,"Fly Speed",10,250,60," studs",function(v)
+
+        flySpeed=v
+
+    end)
+
+
+
+    toggleRow(right,4,"Fly Joystick","On-screen stick for mobile & PC",nil,function(v)
+
+        flyJoystickOn=v
+
+        refreshJoystickVisibility()
+
+    end)
+
+
+
     RunService.Heartbeat:Connect(function()
 
-        local _,_,hum=getChar()
+        local _,root,hum=getChar()
 
         if not hum then return end
 
@@ -1432,9 +1824,113 @@ local function Main()
 
         if hipOn then hum.HipHeight=hipValue end
 
-        if bhopOn and not UIS:GetFocusedTextBox() and UIS:IsKeyDown(Enum.KeyCode.Space) and hum.FloorMaterial~=Enum.Material.Air then
+        if bhopOn and not flyOn and not UIS:GetFocusedTextBox() and UIS:IsKeyDown(Enum.KeyCode.Space) and hum.FloorMaterial~=Enum.Material.Air then
 
             hum.Jump=true
+
+        end
+
+
+
+        if flyOn and root then
+
+            ensureFlyRig(root,hum)
+
+            local cam=workspace.CurrentCamera
+
+            local camCf=cam and cam.CFrame or root.CFrame
+
+            local moveDir=hum.MoveDirection
+
+
+
+            if not UIS:GetFocusedTextBox() then
+
+                local forward=0
+
+                local rightAxis=0
+
+                if UIS:IsKeyDown(Enum.KeyCode.W) then forward=forward+1 end
+
+                if UIS:IsKeyDown(Enum.KeyCode.S) then forward=forward-1 end
+
+                if UIS:IsKeyDown(Enum.KeyCode.D) then rightAxis=rightAxis+1 end
+
+                if UIS:IsKeyDown(Enum.KeyCode.A) then rightAxis=rightAxis-1 end
+
+
+
+                if forward~=0 or rightAxis~=0 then
+
+                    local flatLook=Vector3.new(camCf.LookVector.X,0,camCf.LookVector.Z)
+
+                    if flatLook.Magnitude>0.001 then flatLook=flatLook.Unit end
+
+                    local flatRight=Vector3.new(camCf.RightVector.X,0,camCf.RightVector.Z)
+
+                    if flatRight.Magnitude>0.001 then flatRight=flatRight.Unit end
+
+                    moveDir=(flatLook*forward)+(flatRight*rightAxis)
+
+                    if moveDir.Magnitude>1 then moveDir=moveDir.Unit end
+
+                elseif stickVector.Magnitude>0.05 then
+
+                    local flatLook=Vector3.new(camCf.LookVector.X,0,camCf.LookVector.Z)
+
+                    if flatLook.Magnitude>0.001 then flatLook=flatLook.Unit end
+
+                    local flatRight=Vector3.new(camCf.RightVector.X,0,camCf.RightVector.Z)
+
+                    if flatRight.Magnitude>0.001 then flatRight=flatRight.Unit end
+
+                    local combined=(flatLook*stickVector.Y)+(flatRight*stickVector.X)
+
+                    if combined.Magnitude>1 then combined=combined.Unit end
+
+                    moveDir=combined
+
+                end
+
+            end
+
+
+
+            local vertical=0
+
+            if flyUpHeld or (not UIS:GetFocusedTextBox() and UIS:IsKeyDown(Enum.KeyCode.Space)) then
+
+                vertical=vertical+1
+
+            end
+
+            if flyDownHeld or (not UIS:GetFocusedTextBox() and UIS:IsKeyDown(Enum.KeyCode.LeftControl)) then
+
+                vertical=vertical-1
+
+            end
+
+
+
+            local vel=(moveDir*flySpeed)+Vector3.new(0,vertical*flySpeed,0)
+
+            if flyBv then flyBv.Velocity=vel end
+
+            if flyBg then
+
+                local lookTarget=camCf.LookVector
+
+                if lookTarget.Magnitude>0.001 then
+
+                    flyBg.CFrame=CFrame.lookAt(root.Position,root.Position+lookTarget)
+
+                end
+
+            end
+
+        elseif not flyOn and (flyBv or flyBg) then
+
+            clearFlyRig()
 
         end
 
@@ -1444,7 +1940,7 @@ local function Main()
 
     RunService.Stepped:Connect(function()
 
-        if not noclipOn then return end
+        if not noclipOn and not flyOn then return end
 
         local char=player.Character
 
@@ -1906,17 +2402,61 @@ local function Main()
     local aimlockOn=false
     local aimbotSmoothness=6
     local aimHeadPart=true
+    local teamCheckOn=false
+    local fovLimitOn=false
+    local aimFovRadius=150
+    local showFovCircle=false
     local rmbHeld=false
+
+    local fovCircle=nil
+    if Drawing and Drawing.new then
+        pcall(function()
+            local c=Drawing.new("Circle")
+            c.Visible=false
+            c.Thickness=1.5
+            c.Filled=false
+            c.NumSides=64
+            c.Radius=aimFovRadius
+            c.Color=C.ACCENT
+            fovCircle=c
+        end)
+    end
+
+    local function updateFovCircle()
+        if not fovCircle then return end
+        local cam=workspace.CurrentCamera
+        if not cam or not showFovCircle then
+            pcall(function() fovCircle.Visible=false end)
+            return
+        end
+        pcall(function()
+            fovCircle.Position=Vector2.new(cam.ViewportSize.X*0.5,cam.ViewportSize.Y*0.5)
+            fovCircle.Radius=aimFovRadius
+            fovCircle.Color=C.ACCENT
+            fovCircle.Visible=true
+        end)
+    end
+
+    local function isTeammate(p)
+        if not teamCheckOn then return false end
+        if player.Team and p.Team and player.Team==p.Team then
+            return true
+        end
+        if not player.Neutral and not p.Neutral and player.TeamColor==p.TeamColor then
+            return true
+        end
+        return false
+    end
 
     local function getClosestTargetPart()
         local cam=workspace.CurrentCamera
         if not cam then return nil end
         local center=Vector2.new(cam.ViewportSize.X*0.5,cam.ViewportSize.Y*0.5)
         local bestPart=nil
-        local bestDist=math.huge
+        local bestDist=fovLimitOn and aimFovRadius or math.huge
 
         for _,p in ipairs(Players:GetPlayers()) do
-            if p~=player and p.Character then
+            if p~=player and p.Character and not isTeammate(p) then
                 local hum=p.Character:FindFirstChildOfClass("Humanoid")
                 local part=aimHeadPart and (p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart"))
                     or (p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Head"))
@@ -1956,14 +2496,35 @@ local function Main()
         aimbotSmoothness=v
     end)
 
+    toggleRow(combatLeft,3,"Enable FOV Limit","Restrict aiming to FOV radius",nil,function(v)
+        fovLimitOn=v
+        setStatus(v and "FOV LIMIT ON" or "FOV LIMIT OFF")
+    end)
+
+    sliderRow(combatLeft,4,"FOV Radius",30,500,150," px",function(v)
+        aimFovRadius=v
+    end)
+
     toggleRow(combatRight,1,"Aimlock","Lock camera onto nearest player",nil,function(v)
         aimlockOn=v
         setStatus(v and "AIMLOCK ON" or "AIMLOCK OFF")
     end)
 
-    toggleRow(combatRight,2,"Target Head","Off targets HumanoidRootPart",nil,function(v)
+    toggleRow(combatRight,2,"Team Check","Ignore players on your team",nil,function(v)
+        teamCheckOn=v
+        setStatus(v and "TEAM CHECK ON" or "TEAM CHECK OFF")
+    end)
+
+    toggleRow(combatRight,3,"Target Head","Off targets HumanoidRootPart",nil,function(v)
         aimHeadPart=v
         setStatus(v and "TARGET: HEAD" or "TARGET: ROOT")
+    end)
+
+    toggleRow(combatRight,4,"Show FOV Circle","Draw FOV radius circle on screen",nil,function(v)
+        showFovCircle=v
+        if not v and fovCircle then
+            pcall(function() fovCircle.Visible=false end)
+        end
     end)
 
     UIS.InputBegan:Connect(function(input,processed)
@@ -2556,9 +3117,22 @@ local function Main()
 
         end
 
+        flyOn=false
+
+        clearFlyRig()
+
+        refreshJoystickVisibility()
+
         aimbotOn=false
 
         aimlockOn=false
+
+        showFovCircle=false
+
+        if fovCircle then
+            pcall(function() fovCircle:Remove() end)
+            fovCircle=nil
+        end
 
         workspace.Gravity=origGravity
 
@@ -2684,6 +3258,16 @@ local function Main()
 
     player.CharacterAdded:Connect(function()
 
+        if flyOn then
+
+            task.wait(0.2)
+
+            local _,root,hum=getChar()
+
+            ensureFlyRig(root,hum)
+
+        end
+
         if hipOn then
 
             task.wait(0.5)
@@ -2701,6 +3285,8 @@ local function Main()
     RunService.RenderStepped:Connect(function(dt)
 
         updateBoxEsp()
+
+        updateFovCircle()
 
         if aimlockOn then
 
@@ -2760,7 +3346,7 @@ local function Main()
 
     print("DISCORD: "..DISCORD_INVITE)
 
-    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP")
+    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP | F = FLY")
 
 end
 
