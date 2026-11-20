@@ -27,6 +27,8 @@ local function Main()
 
     local MarketplaceService = game:GetService("MarketplaceService")
 
+    local HttpService = game:GetService("HttpService")
+
 
 
     local player = Players.LocalPlayer
@@ -253,7 +255,6 @@ local function Main()
     corner(searchFrame,8)
     outline(searchFrame)
 
-    -- Draw a small magnifying glass with UI shapes instead of a font emoji.
     local searchLens=make("Frame",{
         Size=UDim2.fromOffset(9,9),
         Position=UDim2.fromOffset(10,8),
@@ -310,8 +311,6 @@ local function Main()
 
 
 
-    -- Brand mark: use a standard Roblox font glyph, not emoji or special symbols.
-    -- The offset shadow and slight tilt give the D a more distinctive badge style.
     make("TextLabel",{
         Name="LogoLetterShadow",
         Size=UDim2.fromScale(1,1),
@@ -497,7 +496,6 @@ local function Main()
 
     },tabList)
 
-    -- Airflow-style player profile: centered avatar, full name, username, and game.
     local profile=make("Frame",{
         Name="PlayerProfile",
         Size=UDim2.new(1,-12,0,106),
@@ -632,8 +630,6 @@ local function Main()
 
     local pages,tabs={},{}
 
-    -- Use plain ASCII monograms instead of Unicode symbols/emoji.
-    -- Some Roblox executor fonts do not include those glyphs and render them as squares.
     local tabIcons={Movement="M",Teleport="TP",Troll="TR",Visual="V",Combat="CB",Misc="MX",Settings="S"}
 
     local activePage="Movement"
@@ -1294,7 +1290,7 @@ local function Main()
 
     local left=column(moveTab,0,0.5,"Speed & Jump")
 
-    local right=column(moveTab,0.5,0.5,"Spider Fly, Anti-Fling & Noclip")
+    local right=column(moveTab,0.5,0.5,"Spider Fly, Anti-Fling & Safety")
 
 
 
@@ -1309,6 +1305,12 @@ local function Main()
     local antiFlingOn=false
 
     local antiFlingCache={}
+
+    local antiVoidOn=false
+
+    local voidThreshold=-75
+
+    local lastSafeCFrame=nil
 
     local flying,flySpeed=false,75
 
@@ -1519,6 +1521,48 @@ local function Main()
                 end
 
             end
+
+        end
+
+    end
+
+
+
+    local function stepAntiVoid()
+
+        if not antiVoidOn then return end
+
+        local char,root,hum=getChar()
+
+        if not char or not root or not hum or hum.Health<=0 then return end
+
+
+
+        if root.Position.Y>voidThreshold+25 and hum.FloorMaterial~=Enum.Material.Air then
+
+            lastSafeCFrame=root.CFrame+Vector3.new(0,3,0)
+
+        end
+
+
+
+        if root.Position.Y<voidThreshold then
+
+            root.AssemblyLinearVelocity=Vector3.zero
+
+            root.AssemblyAngularVelocity=Vector3.zero
+
+            if lastSafeCFrame then
+
+                root.CFrame=lastSafeCFrame
+
+            else
+
+                root.CFrame=CFrame.new(root.Position.X,math.max(voidThreshold+90,45),root.Position.Z)
+
+            end
+
+            setStatus("ANTI-VOID SAVED")
 
         end
 
@@ -1842,8 +1886,6 @@ local function Main()
 
             if not UIS:GetFocusedTextBox() then
 
-                -- PC controls: WASD + Space / LeftControl
-
                 local forward=Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
 
                 if forward.Magnitude>1e-4 then forward=forward.Unit else forward=Vector3.new(0,0,-1) end
@@ -1869,8 +1911,6 @@ local function Main()
             end
 
 
-
-            -- Mobile / Touch controls: virtual thumbstick MoveDirection + Jump button boost
 
             local stickDir=curHum.MoveDirection
 
@@ -2090,7 +2130,37 @@ local function Main()
 
 
 
-    toggleRow(right,4,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
+    toggleRow(right,4,"Anti-Void","Save character when falling out",nil,function(v)
+
+        antiVoidOn=v
+
+        if v then
+
+            local _,root,_=getChar()
+
+            if root and root.Position.Y>voidThreshold+25 then
+
+                lastSafeCFrame=root.CFrame+Vector3.new(0,3,0)
+
+            end
+
+        end
+
+        setStatus(v and "ANTI-VOID ON" or "ANTI-VOID OFF")
+
+    end)
+
+
+
+    sliderRow(right,5,"Void Threshold",-250,0,-75," studs",function(v)
+
+        voidThreshold=v
+
+    end)
+
+
+
+    toggleRow(right,6,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
 
         noclipOn=v
 
@@ -2103,6 +2173,8 @@ local function Main()
     RunService.Heartbeat:Connect(function()
 
         stepAntiFling()
+
+        stepAntiVoid()
 
         local _,_,hum=getChar()
 
@@ -2489,7 +2561,11 @@ local function Main()
 
 
     local boxEspOn=false
+    local tracersOn=false
+    local nameEspOn=false
     local boxEspDrawings={}
+    local tracerDrawings={}
+    local nameGuis={}
 
     local function createBoxDrawing()
         if not Drawing or not Drawing.new then return nil end
@@ -2504,6 +2580,18 @@ local function Main()
         return ok and box or nil
     end
 
+    local function createTracerDrawing()
+        if not Drawing or not Drawing.new then return nil end
+        local ok,line=pcall(function()
+            local ln=Drawing.new("Line")
+            ln.Visible=false
+            ln.Thickness=1.2
+            ln.Color=C.ACCENT
+            return ln
+        end)
+        return ok and line or nil
+    end
+
     local function removeBoxDrawing(p)
         local sq=boxEspDrawings[p]
         if sq then
@@ -2512,9 +2600,37 @@ local function Main()
         end
     end
 
+    local function removeTracerDrawing(p)
+        local ln=tracerDrawings[p]
+        if ln then
+            pcall(function() ln:Remove() end)
+            tracerDrawings[p]=nil
+        end
+    end
+
+    local function removeNameGui(p)
+        local g=nameGuis[p]
+        if g then
+            pcall(function() g:Destroy() end)
+            nameGuis[p]=nil
+        end
+    end
+
     local function clearBoxEsp()
         for p,_ in pairs(boxEspDrawings) do
             removeBoxDrawing(p)
+        end
+    end
+
+    local function clearTracers()
+        for p,_ in pairs(tracerDrawings) do
+            removeTracerDrawing(p)
+        end
+    end
+
+    local function clearNameEsp()
+        for p,_ in pairs(nameGuis) do
+            removeNameGui(p)
         end
     end
 
@@ -2566,6 +2682,92 @@ local function Main()
         end
     end
 
+    local function updateTracers()
+        if not tracersOn then
+            for _,ln in pairs(tracerDrawings) do
+                pcall(function() ln.Visible=false end)
+            end
+            return
+        end
+
+        local cam=workspace.CurrentCamera
+        if not cam then return end
+        local origin=Vector2.new(cam.ViewportSize.X*0.5,cam.ViewportSize.Y)
+
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p~=player then
+                local ln=tracerDrawings[p]
+                if not ln then
+                    ln=createTracerDrawing()
+                    if ln then tracerDrawings[p]=ln end
+                end
+
+                local char=p.Character
+                local root=char and char:FindFirstChild("HumanoidRootPart")
+                if ln and root then
+                    local pos,vis=cam:WorldToViewportPoint(root.Position)
+                    if vis and pos.Z>0 then
+                        pcall(function()
+                            ln.From=origin
+                            ln.To=Vector2.new(pos.X,pos.Y)
+                            ln.Color=C.ACCENT
+                            ln.Visible=true
+                        end)
+                    else
+                        pcall(function() ln.Visible=false end)
+                    end
+                elseif ln then
+                    pcall(function() ln.Visible=false end)
+                end
+            end
+        end
+    end
+
+    local function updateNameEsp()
+        if not nameEspOn then
+            clearNameEsp()
+            return
+        end
+
+        local _,myRoot=getChar()
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p~=player then
+                local char=p.Character
+                local head=char and char:FindFirstChild("Head")
+                local root=char and char:FindFirstChild("HumanoidRootPart")
+                if head and root then
+                    local entry=nameGuis[p]
+                    if not entry or not entry.gui or not entry.gui.Parent or entry.gui.Adornee~=head then
+                        removeNameGui(p)
+                        local bbg=make("BillboardGui",{
+                            Name="DarkMoonNameTag",
+                            Adornee=head,
+                            Size=UDim2.fromOffset(140,22),
+                            StudsOffset=Vector3.new(0,2.2,0),
+                            AlwaysOnTop=true
+                        },parent)
+                        local lbl=make("TextLabel",{
+                            Size=UDim2.fromScale(1,1),
+                            BackgroundTransparency=1,
+                            Text=p.Name,
+                            Font=Enum.Font.GothamBold,
+                            TextSize=11,
+                            TextColor3=C.text,
+                            TextStrokeTransparency=0.35
+                        },bbg)
+                        entry={gui=bbg,label=lbl}
+                        nameGuis[p]=entry
+                    end
+                    local dist=myRoot and math.floor((root.Position-myRoot.Position).Magnitude+0.5) or 0
+                    entry.label.Text=string.format("%s [%dm]",p.Name,dist)
+                    entry.label.TextColor3=C.ACCENT
+                else
+                    removeNameGui(p)
+                end
+            end
+        end
+    end
+
     toggleRow(visualLeft,1,"ESP","2D bounding box around players",nil,function(v)
         boxEspOn=v
         if not v then
@@ -2574,8 +2776,26 @@ local function Main()
         setStatus(v and "ESP ON" or "ESP OFF")
     end)
 
+    toggleRow(visualLeft,2,"Tracers","Lines from bottom screen to players",nil,function(v)
+        tracersOn=v
+        if not v then
+            clearTracers()
+        end
+        setStatus(v and "TRACERS ON" or "TRACERS OFF")
+    end)
+
+    toggleRow(visualLeft,3,"Name ESP","Show player name and distance",nil,function(v)
+        nameEspOn=v
+        if not v then
+            clearNameEsp()
+        end
+        setStatus(v and "NAME ESP ON" or "NAME ESP OFF")
+    end)
+
     Players.PlayerRemoving:Connect(function(p)
         removeBoxDrawing(p)
+        removeTracerDrawing(p)
+        removeNameGui(p)
     end)
 
 
@@ -2586,7 +2806,7 @@ local function Main()
 
     local combatLeft=column(combatTab,0,0.5,"Aiming")
 
-    local combatRight=column(combatTab,0.5,0.5,"Targeting")
+    local combatRight=column(combatTab,0.5,0.5,"Targeting & FOV")
 
 
 
@@ -2594,7 +2814,67 @@ local function Main()
     local aimlockOn=false
     local aimbotSmoothness=6
     local aimHeadPart=true
+    local teamCheckOn=false
+    local fovCircleOn=false
+    local aimFovRadius=150
     local rmbHeld=false
+    local fovCircleDrawing=nil
+
+    local function ensureFovCircle()
+        if not Drawing or not Drawing.new then return nil end
+        if fovCircleDrawing then return fovCircleDrawing end
+        local ok,circle=pcall(function()
+            local c=Drawing.new("Circle")
+            c.Visible=false
+            c.Thickness=1.5
+            c.NumSides=48
+            c.Filled=false
+            c.Color=C.ACCENT
+            return c
+        end)
+        if ok and circle then
+            fovCircleDrawing=circle
+        end
+        return fovCircleDrawing
+    end
+
+    local function clearFovCircle()
+        if fovCircleDrawing then
+            pcall(function() fovCircleDrawing:Remove() end)
+            fovCircleDrawing=nil
+        end
+    end
+
+    local function updateFovCircle()
+        if not fovCircleOn then
+            if fovCircleDrawing then
+                pcall(function() fovCircleDrawing.Visible=false end)
+            end
+            return
+        end
+        local cam=workspace.CurrentCamera
+        if not cam then return end
+        local c=ensureFovCircle()
+        if not c then return end
+        local center=Vector2.new(cam.ViewportSize.X*0.5,cam.ViewportSize.Y*0.5)
+        pcall(function()
+            c.Position=center
+            c.Radius=aimFovRadius
+            c.Color=C.ACCENT
+            c.Visible=true
+        end)
+    end
+
+    local function isSameTeam(p)
+        if not teamCheckOn then return false end
+        if player.Team and p.Team then
+            return player.Team==p.Team
+        end
+        if player.TeamColor and p.TeamColor then
+            return player.TeamColor==p.TeamColor
+        end
+        return false
+    end
 
     local function getClosestTargetPart()
         local cam=workspace.CurrentCamera
@@ -2604,7 +2884,7 @@ local function Main()
         local bestDist=math.huge
 
         for _,p in ipairs(Players:GetPlayers()) do
-            if p~=player and p.Character then
+            if p~=player and not isSameTeam(p) and p.Character then
                 local hum=p.Character:FindFirstChildOfClass("Humanoid")
                 local part=aimHeadPart and (p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart"))
                     or (p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Head"))
@@ -2612,7 +2892,7 @@ local function Main()
                     local screenPos,onScreen=cam:WorldToViewportPoint(part.Position)
                     if onScreen and screenPos.Z>0 then
                         local dist=(Vector2.new(screenPos.X,screenPos.Y)-center).Magnitude
-                        if dist<bestDist then
+                        if (not fovCircleOn or dist<=aimFovRadius) and dist<bestDist then
                             bestDist=dist
                             bestPart=part
                         end
@@ -2644,14 +2924,31 @@ local function Main()
         aimbotSmoothness=v
     end)
 
-    toggleRow(combatRight,1,"Aimlock","Lock camera onto nearest player",nil,function(v)
+    toggleRow(combatLeft,3,"Aimlock","Lock camera onto nearest player",nil,function(v)
         aimlockOn=v
         setStatus(v and "AIMLOCK ON" or "AIMLOCK OFF")
     end)
 
-    toggleRow(combatRight,2,"Target Head","Off targets HumanoidRootPart",nil,function(v)
+    toggleRow(combatRight,1,"Target Head","Off targets HumanoidRootPart",nil,function(v)
         aimHeadPart=v
         setStatus(v and "TARGET: HEAD" or "TARGET: ROOT")
+    end)
+
+    toggleRow(combatRight,2,"Team Check","Ignore players on your team",nil,function(v)
+        teamCheckOn=v
+        setStatus(v and "TEAM CHECK ON" or "TEAM CHECK OFF")
+    end)
+
+    toggleRow(combatRight,3,"FOV Circle","Draw aim FOV circle & filter targets",nil,function(v)
+        fovCircleOn=v
+        if not v and fovCircleDrawing then
+            pcall(function() fovCircleDrawing.Visible=false end)
+        end
+        setStatus(v and "FOV CIRCLE ON" or "FOV CIRCLE OFF")
+    end)
+
+    sliderRow(combatRight,4,"Aim FOV Radius",30,500,150," px",function(v)
+        aimFovRadius=v
     end)
 
     UIS.InputBegan:Connect(function(input,processed)
@@ -2685,9 +2982,71 @@ local function Main()
 
     local hlOn=false
 
+    local walkOnWaterOn=false
+
+    local waterPart=nil
+
     local highlights={}
 
     local lightingBackup={}
+
+
+
+    local function destroyWaterPart()
+
+        if waterPart then
+
+            pcall(function() waterPart:Destroy() end)
+
+            waterPart=nil
+
+        end
+
+    end
+
+
+
+    local function stepWalkOnWater()
+
+        if not walkOnWaterOn then
+
+            destroyWaterPart()
+
+            return
+
+        end
+
+        local _,root,_=getChar()
+
+        if not root then
+
+            destroyWaterPart()
+
+            return
+
+        end
+
+        if not waterPart or not waterPart.Parent then
+
+            waterPart=make("Part",{
+
+                Name="DarkMoonWaterWalk",
+
+                Size=Vector3.new(14,1,14),
+
+                Anchored=true,
+
+                CanCollide=true,
+
+                Transparency=1
+
+            },workspace)
+
+        end
+
+        waterPart.Position=Vector3.new(root.Position.X,root.Position.Y-3.5,root.Position.Z)
+
+    end
 
 
 
@@ -2817,6 +3176,18 @@ local function Main()
 
 
 
+    toggleRow(miscLeft,6,"Walk on Water","Support platform beneath character",nil,function(v)
+
+        walkOnWaterOn=v
+
+        if not v then destroyWaterPart() end
+
+        setStatus(v and "WALK ON WATER ON" or "WALK ON WATER OFF")
+
+    end)
+
+
+
     Players.PlayerAdded:Connect(function(p)
 
         p.CharacterAdded:Connect(function()
@@ -2887,7 +3258,49 @@ local function Main()
 
 
 
-    buttonRow(miscRight,4,"COPY DISCORD INVITE",C.row,function()
+    buttonRow(miscRight,4,"SERVER HOP",C.row,function()
+
+        setStatus("FINDING SERVER...",C.sub)
+
+        task.spawn(function()
+
+            local ok,res=pcall(function()
+
+                local url=string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=50",game.PlaceId)
+
+                return HttpService:JSONDecode(game:HttpGet(url))
+
+            end)
+
+            if ok and res and type(res.data)=="table" then
+
+                for _,srv in ipairs(res.data) do
+
+                    if srv.id and srv.id~=game.JobId and (srv.playing or 0)<(srv.maxPlayers or 0) then
+
+                        pcall(function()
+
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId,srv.id,player)
+
+                        end)
+
+                        return
+
+                    end
+
+                end
+
+            end
+
+            setStatus("NO OTHER SERVER FOUND",C.bad)
+
+        end)
+
+    end)
+
+
+
+    buttonRow(miscRight,5,"COPY DISCORD INVITE",C.row,function()
 
         if setclipboard then
 
@@ -3248,17 +3661,29 @@ local function Main()
 
         antiFlingOn=false
 
+        antiVoidOn=false
+
         restoreAntiFlingCollisions()
+
+        destroyWaterPart()
 
         aimbotOn=false
 
         aimlockOn=false
+
+        fovCircleOn=false
 
         workspace.Gravity=origGravity
 
         clearHighlights()
 
         clearBoxEsp()
+
+        clearTracers()
+
+        clearNameEsp()
+
+        clearFovCircle()
 
         gui:Destroy()
 
@@ -3380,6 +3805,8 @@ local function Main()
 
         antiFlingCache={}
 
+        lastSafeCFrame=nil
+
         stopFly()
 
         if flyToggle then flyToggle.Set(false,true) end
@@ -3400,7 +3827,15 @@ local function Main()
 
     RunService.RenderStepped:Connect(function(dt)
 
+        stepWalkOnWater()
+
         updateBoxEsp()
+
+        updateTracers()
+
+        updateNameEsp()
+
+        updateFovCircle()
 
         if aimlockOn then
 
