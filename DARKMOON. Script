@@ -86,6 +86,8 @@ local Theme = {
 	TextMuted = Color3.fromRGB(145, 148, 180),
 	OffPill = Color3.fromRGB(32, 35, 54),
 	OnPill = Color3.fromRGB(118, 98, 255),
+	KnobOff = Color3.fromRGB(162, 166, 204),
+	KnobOn = Color3.fromRGB(250, 249, 255),
 	BorderSoft = Color3.fromRGB(52, 55, 88),
 	GunColor = Color3.fromRGB(255, 210, 75),
 	FlingBtn = Color3.fromRGB(255, 85, 110),
@@ -607,7 +609,9 @@ local function createCategoryTab(tabName)
 	return Page
 end
 
--- Pill Badge Toggle Button (ON / OFF)
+-- Modern Sliding Pill Toggle Switch
+local switchTween = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
 local function addToggleOption(page, titleText, subtitleText, settingKey, onChanged)
 	local Row = Instance.new("TextButton")
 	Row.Size = UDim2.new(1, -18, 0, 48)
@@ -617,7 +621,7 @@ local function addToggleOption(page, titleText, subtitleText, settingKey, onChan
 	Row.Parent = page
 
 	local RowCorner = Instance.new("UICorner")
-	RowCorner.CornerRadius = UDim.new(0, 9)
+	RowCorner.CornerRadius = UDim.new(0, 10)
 	RowCorner.Parent = Row
 
 	local RowStroke = Instance.new("UIStroke")
@@ -638,7 +642,7 @@ local function addToggleOption(page, titleText, subtitleText, settingKey, onChan
 	AccentCorner.Parent = AccentBar
 
 	local Title = Instance.new("TextLabel")
-	Title.Size = UDim2.new(1, -86, 0, 20)
+	Title.Size = UDim2.new(1, -76, 0, 20)
 	Title.Position = UDim2.new(0, 14, 0, 6)
 	Title.BackgroundTransparency = 1
 	Title.Text = titleText
@@ -649,7 +653,7 @@ local function addToggleOption(page, titleText, subtitleText, settingKey, onChan
 	Title.Parent = Row
 
 	local Sub = Instance.new("TextLabel")
-	Sub.Size = UDim2.new(1, -86, 0, 16)
+	Sub.Size = UDim2.new(1, -76, 0, 16)
 	Sub.Position = UDim2.new(0, 14, 0, 25)
 	Sub.BackgroundTransparency = 1
 	Sub.Text = subtitleText
@@ -659,67 +663,62 @@ local function addToggleOption(page, titleText, subtitleText, settingKey, onChan
 	Sub.TextXAlignment = Enum.TextXAlignment.Left
 	Sub.Parent = Row
 
-	local StatusPill = Instance.new("Frame")
-	StatusPill.Name = "StatusPill"
-	StatusPill.Size = UDim2.new(0, 56, 0, 24)
-	StatusPill.Position = UDim2.new(1, -66, 0.5, -12)
-	StatusPill.BackgroundColor3 = Theme.OffPill
-	StatusPill.BorderSizePixel = 0
-	StatusPill.Parent = Row
+	local SwitchTrack = Instance.new("Frame")
+	SwitchTrack.Name = "SwitchTrack"
+	SwitchTrack.Size = UDim2.new(0, 44, 0, 24)
+	SwitchTrack.Position = UDim2.new(1, -56, 0.5, -12)
+	SwitchTrack.BackgroundColor3 = Theme.OffPill
+	SwitchTrack.BorderSizePixel = 0
+	SwitchTrack.Parent = Row
 
-	local PillCorner = Instance.new("UICorner")
-	PillCorner.CornerRadius = UDim.new(0, 7)
-	PillCorner.Parent = StatusPill
+	local TrackCorner = Instance.new("UICorner")
+	TrackCorner.CornerRadius = UDim.new(1, 0)
+	TrackCorner.Parent = SwitchTrack
 
-	local PillStroke = Instance.new("UIStroke")
-	PillStroke.Color = Theme.BorderSoft
-	PillStroke.Thickness = 1
-	PillStroke.Parent = StatusPill
+	local TrackStroke = Instance.new("UIStroke")
+	TrackStroke.Color = Theme.BorderSoft
+	TrackStroke.Thickness = 1.1
+	TrackStroke.Parent = SwitchTrack
 
-	local StatusDot = Instance.new("Frame")
-	StatusDot.Size = UDim2.new(0, 6, 0, 6)
-	StatusDot.Position = UDim2.new(0, 8, 0.5, -3)
-	StatusDot.BackgroundColor3 = Theme.TextMuted
-	StatusDot.BorderSizePixel = 0
-	StatusDot.Parent = StatusPill
+	local SwitchKnob = Instance.new("Frame")
+	SwitchKnob.Name = "SwitchKnob"
+	SwitchKnob.Size = UDim2.new(0, 18, 0, 18)
+	SwitchKnob.Position = UDim2.new(0, 3, 0.5, -9)
+	SwitchKnob.BackgroundColor3 = Theme.KnobOff
+	SwitchKnob.BorderSizePixel = 0
+	SwitchKnob.Parent = SwitchTrack
 
-	local DotCorner = Instance.new("UICorner")
-	DotCorner.CornerRadius = UDim.new(1, 0)
-	DotCorner.Parent = StatusDot
+	local KnobCorner = Instance.new("UICorner")
+	KnobCorner.CornerRadius = UDim.new(1, 0)
+	KnobCorner.Parent = SwitchKnob
 
-	local StatusText = Instance.new("TextLabel")
-	StatusText.Size = UDim2.new(1, -18, 1, 0)
-	StatusText.Position = UDim2.new(0, 16, 0, 0)
-	StatusText.BackgroundTransparency = 1
-	StatusText.Text = "OFF"
-	StatusText.TextColor3 = Theme.TextMuted
-	StatusText.Font = Enum.Font.GothamBlack
-	StatusText.TextSize = 10
-	StatusText.Parent = StatusPill
+	local KnobStroke = Instance.new("UIStroke")
+	KnobStroke.Color = Theme.VoidBg
+	KnobStroke.Thickness = 1
+	KnobStroke.Transparency = 0.35
+	KnobStroke.Parent = SwitchKnob
 
 	local function updateState(instant)
 		local active = Settings[settingKey]
-		local pillBg = active and Theme.OnPill or Theme.OffPill
-		local pillBorder = active and Theme.MoonGlow or Theme.BorderSoft
-		local dotColor = active and Color3.fromRGB(115, 255, 165) or Theme.TextMuted
-		local txtColor = active and Theme.TextBright or Theme.TextMuted
+		local trackBg = active and Theme.OnPill or Theme.OffPill
+		local trackBorder = active and Theme.MoonGlow or Theme.BorderSoft
+		local knobPos = active and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+		local knobColor = active and Theme.KnobOn or Theme.KnobOff
 		local rowBorder = active and Theme.MoonAccent or Theme.BorderSoft
 
-		StatusText.Text = active and "ON" or "OFF"
 		AccentBar.Visible = active
 
 		if instant then
-			StatusPill.BackgroundColor3 = pillBg
-			PillStroke.Color = pillBorder
-			StatusDot.BackgroundColor3 = dotColor
-			StatusText.TextColor3 = txtColor
+			SwitchTrack.BackgroundColor3 = trackBg
+			TrackStroke.Color = trackBorder
+			SwitchKnob.Position = knobPos
+			SwitchKnob.BackgroundColor3 = knobColor
 			RowStroke.Color = rowBorder
 		else
-			TweenService:Create(StatusPill, tweenInfo, { BackgroundColor3 = pillBg }):Play()
-			TweenService:Create(PillStroke, tweenInfo, { Color = pillBorder }):Play()
-			TweenService:Create(StatusDot, tweenInfo, { BackgroundColor3 = dotColor }):Play()
-			TweenService:Create(StatusText, tweenInfo, { TextColor3 = txtColor }):Play()
-			TweenService:Create(RowStroke, tweenInfo, { Color = rowBorder }):Play()
+			TweenService:Create(SwitchTrack, switchTween, { BackgroundColor3 = trackBg }):Play()
+			TweenService:Create(TrackStroke, switchTween, { Color = trackBorder }):Play()
+			TweenService:Create(SwitchKnob, switchTween, { Position = knobPos, BackgroundColor3 = knobColor }):Play()
+			TweenService:Create(RowStroke, switchTween, { Color = rowBorder }):Play()
 		end
 	end
 
@@ -1829,7 +1828,7 @@ local function createPlayerListCard(player)
 
 		local FlingCorner = Instance.new("UICorner")
 		FlingCorner.CornerRadius = UDim.new(0, 7)
-		FlingBtn.Parent = Card
+		FlingCorner.Parent = FlingBtn
 
 		FlingBtn.MouseButton1Click:Connect(function()
 			if isFlinging then return end
@@ -2125,7 +2124,7 @@ RunService.RenderStepped:Connect(function(dt)
 
 	-- Aimbot & Silent Aim Target Indicator
 	local aimActive = Settings.Aimbot or Settings.SilentAim
-	local aimPart, aimRole = aimActive and selectBestAimTarget() or nil, nil
+	local aimPart, aimRole = nil, nil
 	if aimActive then
 		aimPart, aimRole = selectBestAimTarget()
 	end
