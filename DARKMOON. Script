@@ -4,7 +4,7 @@
 	Imagem do botão flutuante e do fundo da UI: rbxassetid://18280618252
 ]]
 
-local Library = loadstring(game:HttpGet(""))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/darkmoonofficial40-cloud/darkmoon-script/refs/heads/main/DARKMOON.%20Script"))()
 
 -- ============================================
 -- SERVIÇOS / VARIÁVEIS
