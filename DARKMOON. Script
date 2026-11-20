@@ -12,6 +12,12 @@ local TOGGLE_KEY = Enum.KeyCode.RightShift
 local SPRINT_KEY = Enum.KeyCode.LeftShift
 local SPRINT_BONUS = 10
 
+local PanelSizes = {
+	Small = Vector2.new(390, 295),
+	Medium = Vector2.new(476, 348),
+	Large = Vector2.new(560, 405),
+}
+
 local Settings = {
 	-- Combat / Aim
 	TargetLock = true,
@@ -26,6 +32,7 @@ local Settings = {
 	Prediction = 0.08,
 
 	-- Visuals
+	PanelSize = "Medium", -- "Small", "Medium", "Large"
 	RoleBoxESP = true,
 	RoleNameESP = true,
 	RoleTracerESP = false,
@@ -41,7 +48,6 @@ local Settings = {
 	WalkSpeed = 16,
 	JumpPower = 50,
 	AutoPickupGun = false,
-	AutoCollect = false,
 	KillAllLoop = false,
 	FlingPower = 180,
 }
@@ -98,7 +104,7 @@ ScreenGui.Parent = PlayerGui
 local function buildDarkmoonLogo(parent, showOptionsTag)
 	local LogoHolder = Instance.new("Frame")
 	LogoHolder.Name = "DarkmoonLogo"
-	LogoHolder.Size = UDim2.new(1, -46, 1, 0)
+	LogoHolder.Size = UDim2.new(1, -76, 1, 0)
 	LogoHolder.Position = UDim2.new(0, 10, 0, 0)
 	LogoHolder.BackgroundTransparency = 1
 	LogoHolder.Parent = parent
@@ -220,10 +226,12 @@ local MarkerCorner = Instance.new("UICorner")
 MarkerCorner.CornerRadius = UDim.new(1, 0)
 MarkerCorner.Parent = AimMarker
 
+local initialSize = PanelSizes[Settings.PanelSize] or PanelSizes.Medium
+
 -- Main Option Window
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 476, 0, 348)
+MainFrame.Size = UDim2.new(0, initialSize.X, 0, initialSize.Y)
 MainFrame.Position = UDim2.new(0.04, 0, 0.21, 0)
 MainFrame.BackgroundColor3 = Theme.VoidBg
 MainFrame.BorderSizePixel = 0
@@ -261,6 +269,21 @@ TopDivider.BackgroundColor3 = Theme.BorderSoft
 TopDivider.BorderSizePixel = 0
 TopDivider.Parent = MainFrame
 
+local ResizeBtn = Instance.new("TextButton")
+ResizeBtn.Name = "ResizeButton"
+ResizeBtn.Size = UDim2.new(0, 28, 0, 26)
+ResizeBtn.Position = UDim2.new(1, -68, 0.5, -13)
+ResizeBtn.BackgroundColor3 = Theme.CardBg
+ResizeBtn.Text = "⤢"
+ResizeBtn.TextColor3 = Theme.MoonGlow
+ResizeBtn.Font = Enum.Font.GothamBold
+ResizeBtn.TextSize = 13
+ResizeBtn.Parent = Header
+
+local ResizeCorner = Instance.new("UICorner")
+ResizeCorner.CornerRadius = UDim.new(0, 7)
+ResizeCorner.Parent = ResizeBtn
+
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 28, 0, 26)
 MinimizeBtn.Position = UDim2.new(1, -36, 0.5, -13)
@@ -296,6 +319,29 @@ ReopenStroke.Thickness = 1.5
 ReopenStroke.Parent = ReopenBtn
 
 buildDarkmoonLogo(ReopenBtn, false)
+
+local SizeListeners = {}
+local function applyPanelSize(sizeKey)
+	local dims = PanelSizes[sizeKey] or PanelSizes.Medium
+	Settings.PanelSize = sizeKey
+	MainFrame.Size = UDim2.new(0, dims.X, 0, dims.Y)
+	for _, fn in ipairs(SizeListeners) do
+		fn(sizeKey)
+	end
+end
+
+local SizeOrder = { "Small", "Medium", "Large" }
+ResizeBtn.MouseButton1Click:Connect(function()
+	local currentIdx = 2
+	for i, key in ipairs(SizeOrder) do
+		if key == Settings.PanelSize then
+			currentIdx = i
+			break
+		end
+	end
+	local nextKey = SizeOrder[(currentIdx % #SizeOrder) + 1]
+	applyPanelSize(nextKey)
+end)
 
 local function applyMovementStats(character)
 	local hum = character and character:FindFirstChildOfClass("Humanoid")
@@ -616,7 +662,7 @@ local function setSettingState(settingKey, value)
 	end
 end
 
-local function addStepperOption(page, titleText, options, labels, settingKey)
+local function addStepperOption(page, titleText, options, labels, settingKey, onChanged)
 	local Row = Instance.new("Frame")
 	Row.Size = UDim2.new(1, -18, 0, 44)
 	Row.BackgroundColor3 = Theme.CardBg
@@ -681,19 +727,29 @@ local function addStepperOption(page, titleText, options, labels, settingKey)
 	NextCorner.Parent = NextBtn
 
 	local idx = 1
-	for i, v in ipairs(options) do
-		if v == Settings[settingKey] then idx = i break end
+	local function syncDisplay(val)
+		for i, v in ipairs(options) do
+			if v == val then
+				idx = i
+				ValLabel.Text = labels[i]
+				return
+			end
+		end
 	end
-	ValLabel.Text = labels[idx]
+
+	syncDisplay(Settings[settingKey])
 
 	local function step(dir)
 		idx = ((idx - 1 + dir) % #options) + 1
 		Settings[settingKey] = options[idx]
 		ValLabel.Text = labels[idx]
+		if onChanged then onChanged(Settings[settingKey]) end
 	end
 
 	PrevBtn.MouseButton1Click:Connect(function() step(-1) end)
 	NextBtn.MouseButton1Click:Connect(function() step(1) end)
+
+	return syncDisplay
 end
 
 local function addSliderOption(page, titleText, minVal, maxVal, decimals, settingKey, onChanged)
@@ -1287,24 +1343,6 @@ local function getDroppedGunTarget()
 	return nil, nil, nil
 end
 
-local function findNearestCollectiblePart(myPos)
-	local bestPart = nil
-	local bestDist = math.huge
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("BasePart") and not isPlayerOwnedDescendant(obj) then
-			local lower = string.lower(obj.Name)
-			if string.find(lower, "coin", 1, true) or string.find(lower, "gem", 1, true) or string.find(lower, "orb", 1, true) then
-				local dist = (obj.Position - myPos).Magnitude
-				if dist < bestDist then
-					bestDist = dist
-					bestPart = obj
-				end
-			end
-		end
-	end
-	return bestPart
-end
-
 -- Build Tabs & Options
 local CombatPage = createCategoryTab("Combat")
 local VisualsPage = createCategoryTab("Visuals")
@@ -1321,6 +1359,22 @@ addToggleOption(CombatPage, "Ignore FOV", "Target anywhere on screen", "IgnoreFO
 addToggleOption(CombatPage, "Wall Check", "Require clear line of sight", "WallCheck")
 addSliderOption(CombatPage, "Lock Smoothness", 0.05, 1.0, 2, "Smoothness")
 addSliderOption(CombatPage, "Velocity Lead", 0, 0.25, 2, "Prediction")
+
+local syncPanelSizeStepper = addStepperOption(
+	VisualsPage,
+	"Panel Size",
+	{ "Small", "Medium", "Large" },
+	{ "Small", "Medium", "Large" },
+	"PanelSize",
+	function(sizeKey)
+		applyPanelSize(sizeKey)
+	end
+)
+table.insert(SizeListeners, function(sizeKey)
+	if syncPanelSizeStepper then
+		syncPanelSizeStepper(sizeKey)
+	end
+end)
 
 addToggleOption(VisualsPage, "2D Role Box", "Innocent Green • Murder Red • Sheriff Blue", "RoleBoxESP")
 addToggleOption(VisualsPage, "Role Name & Dist", "Show role and distance tags", "RoleNameESP")
@@ -1354,7 +1408,6 @@ addSliderOption(MovementPage, "Jump Power", 50, 120, 0, "JumpPower", function()
 end)
 
 addToggleOption(UtilityPage, "Auto Pickup Gun", "Snap directly to dropped gun", "AutoPickupGun")
-addToggleOption(UtilityPage, "Auto Collect Coins", "Snap to nearby coins or gems", "AutoCollect")
 addToggleOption(UtilityPage, "Kill All Loop", "Repeat until all down or toggled off", "KillAllLoop", function(enabled)
 	if enabled and not isKillingAll then
 		task.spawn(function()
@@ -1814,7 +1867,6 @@ local function getBestAimTarget()
 end
 
 local function getSilentAimTargetPart()
-	-- Prioritize active Murderer when AimPriority is Murderer (or when Strict Murder mode is active)
 	if Settings.AimPriority == "Murderer" or Settings.SilentAimMode == "Strict" then
 		local murderPlr = findActiveMurderer()
 		if murderPlr then
@@ -2009,11 +2061,6 @@ task.spawn(function()
 						prompt:InputHoldEnd()
 					end)
 				end
-			end
-		elseif Settings.AutoCollect then
-			local coinPart = findNearestCollectiblePart(hrp.Position)
-			if coinPart then
-				teleportToCFrame(CFrame.new(coinPart.Position + Vector3.new(0, 1.2, 0)))
 			end
 		end
 	end
