@@ -1,9 +1,11 @@
 --[[
 	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
 ]]
--- Adrin's Scripts V6.2
+-- DARK MOON V 1.2
+-- By biyxznd
+-- Discord: https://discord.gg/QxRKp
 
--- Movement + Teleport + Troll + Misc + Settings
+-- Movement + Teleport + Troll + ESP + Misc + Settings
 
 -- RIGHT SHIFT = Open / Close Menu
 
@@ -31,6 +33,8 @@ local function Main()
 
     local mouse = player:GetMouse()
 
+    local DISCORD_INVITE = "https://discord.gg/QxRKp"
+
 
 
     local function notify(msg)
@@ -39,7 +43,7 @@ local function Main()
 
             game:GetService("StarterGui"):SetCore("SendNotification", {
 
-                Title = "Adrin's Scripts",
+                Title = "DARK MOON V 1.2",
 
                 Text = msg,
 
@@ -53,7 +57,7 @@ local function Main()
 
 
 
-    notify("Loading V6.2...")
+    notify("Loading DARK MOON V 1.2...")
 
 
 
@@ -77,9 +81,13 @@ local function Main()
 
     pcall(function()
 
-        local old = parent:FindFirstChild("AdrinsScripts")
+        local old = parent:FindFirstChild("DarkMoonScripts")
 
         if old then old:Destroy() end
+
+        local oldAdrin = parent:FindFirstChild("AdrinsScripts")
+
+        if oldAdrin then oldAdrin:Destroy() end
 
     end)
 
@@ -173,7 +181,7 @@ local function Main()
 
     local gui = make("ScreenGui", {
 
-        Name="AdrinsScripts",
+        Name="DarkMoonScripts",
 
         ResetOnSpawn=false,
 
@@ -303,13 +311,13 @@ local function Main()
 
 
     -- Brand mark: use a standard Roblox font glyph, not emoji or special symbols.
-    -- The offset shadow and slight tilt give the A a more distinctive badge style.
+    -- The offset shadow and slight tilt give the D a more distinctive badge style.
     make("TextLabel",{
         Name="LogoLetterShadow",
         Size=UDim2.fromScale(1,1),
         Position=UDim2.fromOffset(1,2),
         BackgroundTransparency=1,
-        Text="A",
+        Text="D",
         Font=Enum.Font.GothamBlack,
         TextSize=23,
         TextColor3=Color3.fromRGB(89,52,112),
@@ -322,7 +330,7 @@ local function Main()
         Name="LogoLetter",
         Size=UDim2.fromScale(1,1),
         BackgroundTransparency=1,
-        Text="A",
+        Text="D",
         Font=Enum.Font.GothamBlack,
         TextSize=23,
         TextColor3=Color3.fromRGB(255,250,255),
@@ -343,7 +351,7 @@ local function Main()
 
         BackgroundTransparency=1,
 
-        Text="Main",
+        Text="DARK MOON",
 
         Font=Enum.Font.GothamBold,
 
@@ -359,12 +367,12 @@ local function Main()
 
     local gameTitleLabel=make("TextLabel",{
         Name="ExperienceName",
-        Size=UDim2.fromOffset(240,14),
+        Size=UDim2.fromOffset(260,14),
         Position=UDim2.fromOffset(120,36),
         BackgroundTransparency=1,
-        Text=game.Name,
+        Text="V 1.2 · by biyxznd · "..DISCORD_INVITE,
         Font=Enum.Font.Gotham,
-        TextSize=11,
+        TextSize=10,
         TextColor3=C.sub,
         TextXAlignment=Enum.TextXAlignment.Left,
         TextTruncate=Enum.TextTruncate.AtEnd
@@ -573,7 +581,7 @@ local function Main()
                 profileGameLabel.Text=info.Name
             end
             if gameTitleLabel and gameTitleLabel.Parent then
-                gameTitleLabel.Text=info.Name
+                gameTitleLabel.Text="V 1.2 · by biyxznd · "..info.Name
             end
         end
     end)
@@ -626,7 +634,7 @@ local function Main()
 
     -- Use plain ASCII monograms instead of Unicode symbols/emoji.
     -- Some Roblox executor fonts do not include those glyphs and render them as squares.
-    local tabIcons={Movement="M",Teleport="TP",Troll="TR",Misc="MX",Settings="S"}
+    local tabIcons={Movement="M",Teleport="TP",Troll="TR",ESP="ESP",Misc="MX",Settings="S"}
 
     local activePage="Movement"
     local searchableRows={}
@@ -1286,7 +1294,7 @@ local function Main()
 
     local left=column(moveTab,0,0.5,"Speed & Jump")
 
-    local right=column(moveTab,0.5,0.5,"Float & Noclip")
+    local right=column(moveTab,0.5,0.5,"Noclip")
 
 
 
@@ -1297,8 +1305,6 @@ local function Main()
     local hipOn,hipValue,origHip=false,2,2
 
     local bhopOn,infJumpEnabled,noclipOn=false,false,false
-
-    local floatOn,floatSpeed,floatY,floatPart=false,40,0,nil
 
 
 
@@ -1408,69 +1414,9 @@ local function Main()
 
 
 
-    local clickTpOn=false
+    RunService.Heartbeat:Connect(function()
 
-    toggleRow(right,2,"Click Teleport","Hold Left Ctrl + click",Enum.KeyCode.T,function(v)
-
-        clickTpOn=v
-
-    end)
-
-
-
-    local floatToggle
-
-    floatToggle=toggleRow(right,3,"Air Float Platform","Q / E to move platform",nil,function(v)
-
-        local _,root=getChar()
-
-        if v then
-
-            if not root then
-
-                floatToggle.Set(false,true)
-
-                return
-
-            end
-
-            floatOn=true
-
-            floatY=root.Position.Y-3.5
-
-            floatPart=make("Part",{
-
-                Name="AirPlate",
-
-                Size=Vector3.new(10,1,10),
-
-                Anchored=true,
-
-                Transparency=1,
-
-                CanCollide=true,
-
-                CFrame=CFrame.new(root.Position.X,floatY,root.Position.Z)
-
-            },workspace)
-
-        else
-
-            floatOn=false
-
-            if floatPart then floatPart:Destroy() floatPart=nil end
-
-        end
-
-    end)
-
-    sliderRow(right,4,"Float Q/E Speed",1,150,40,"",function(v) floatSpeed=v end)
-
-
-
-    RunService.Heartbeat:Connect(function(dt)
-
-        local _,root,hum=getChar()
+        local _,_,hum=getChar()
 
         if not hum then return end
 
@@ -1492,16 +1438,6 @@ local function Main()
 
         end
 
-        if floatOn and floatPart and root and not UIS:GetFocusedTextBox() then
-
-            if UIS:IsKeyDown(Enum.KeyCode.Q) then floatY=floatY-floatSpeed*dt end
-
-            if UIS:IsKeyDown(Enum.KeyCode.E) then floatY=floatY+floatSpeed*dt end
-
-            floatPart.CFrame=CFrame.new(root.Position.X,floatY,root.Position.Z)
-
-        end
-
     end)
 
 
@@ -1517,28 +1453,6 @@ local function Main()
         for _,part in ipairs(char:GetDescendants()) do
 
             if part:IsA("BasePart") then part.CanCollide=false end
-
-        end
-
-    end)
-
-
-
-    UIS.InputBegan:Connect(function(input,processed)
-
-        if processed or not clickTpOn then return end
-
-        if input.UserInputType==Enum.UserInputType.MouseButton1 and UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
-
-            local char,root=getChar()
-
-            if root and mouse and mouse.Hit then
-
-                mouse.TargetFilter=char
-
-                root.CFrame=CFrame.new(mouse.Hit.Position+Vector3.new(0,3,0))
-
-            end
 
         end
 
@@ -1714,13 +1628,9 @@ local function Main()
 
     local spinOn,spinSpeed=false,20
 
-    local shakeOn,shakeAmt=false,5
-
     local lowGravOn,gravValue=false,50
 
     local origGravity=workspace.Gravity
-
-    local orbitOn,orbitRadius,orbitSpeed,orbitAngle=false,10,5,0
 
     local followOn,spectateOn=false,false
 
@@ -1732,11 +1642,7 @@ local function Main()
 
     sliderRow(trollLeft,2,"Spin Speed",1,100,20,"",function(v) spinSpeed=v end)
 
-    toggleRow(trollLeft,3,"Shake","Vibrate your character",nil,function(v) shakeOn=v end)
-
-    sliderRow(trollLeft,4,"Shake Intensity",1,20,5,"",function(v) shakeAmt=v end)
-
-    toggleRow(trollLeft,5,"Low Gravity","Float like on the moon",nil,function(v)
+    toggleRow(trollLeft,3,"Low Gravity","Float like on the moon",nil,function(v)
 
         lowGravOn=v
 
@@ -1744,7 +1650,7 @@ local function Main()
 
     end)
 
-    sliderRow(trollLeft,6,"Gravity Value",0,196,50,"",function(v)
+    sliderRow(trollLeft,4,"Gravity Value",0,196,50,"",function(v)
 
         gravValue=v
 
@@ -1796,25 +1702,9 @@ local function Main()
 
 
 
-    local orbitToggle
-
-    orbitToggle=toggleRow(trollRight,2,"Orbit Player","Circle around selected player",nil,function(v)
-
-        if v and not needTarget(orbitToggle) then return end
-
-        orbitOn=v
-
-    end)
-
-    sliderRow(trollRight,3,"Orbit Radius",3,50,10," studs",function(v) orbitRadius=v end)
-
-    sliderRow(trollRight,4,"Orbit Speed",1,20,5,"",function(v) orbitSpeed=v end)
-
-
-
     local followToggle
 
-    followToggle=toggleRow(trollRight,5,"Follow Player","Walk after selected player",nil,function(v)
+    followToggle=toggleRow(trollRight,2,"Follow Player","Walk after selected player",nil,function(v)
 
         if v and not needTarget(followToggle) then return end
 
@@ -1826,7 +1716,7 @@ local function Main()
 
     local spectateToggle
 
-    spectateToggle=toggleRow(trollRight,6,"Spectate Player","View through their camera",nil,function(v)
+    spectateToggle=toggleRow(trollRight,3,"Spectate Player","View through their camera",nil,function(v)
 
         if v and not needTarget(spectateToggle) then return end
 
@@ -1856,14 +1746,6 @@ local function Main()
 
         if spinOn then root.CFrame=root.CFrame*CFrame.Angles(0,math.rad(spinSpeed),0) end
 
-        if shakeOn then
-
-            local a=shakeAmt/10
-
-            root.CFrame=root.CFrame*CFrame.new((math.random()-0.5)*a,(math.random()-0.5)*a*0.5,(math.random()-0.5)*a)
-
-        end
-
 
 
         local target=selectedPlayer and selectedPlayer.Character
@@ -1871,22 +1753,6 @@ local function Main()
         local targetRoot=target and target:FindFirstChild("HumanoidRootPart")
 
         local targetHum=target and target:FindFirstChildOfClass("Humanoid")
-
-
-
-        if orbitOn and targetRoot then
-
-            orbitAngle=orbitAngle+orbitSpeed*dt
-
-            local center=targetRoot.Position
-
-            local pos=center+Vector3.new(math.cos(orbitAngle)*orbitRadius,0,math.sin(orbitAngle)*orbitRadius)
-
-            root.CFrame=CFrame.new(pos,center)
-
-            root.AssemblyLinearVelocity=Vector3.zero
-
-        end
 
 
 
@@ -1924,9 +1790,111 @@ local function Main()
 
 
 
+    -- ESP*
+
+    local espTab=newTab("ESP",4)
+
+    local espLeft=column(espTab,0,0.5,"Visuals")
+
+    local espRight=column(espTab,0.5,0.5,"Options")
+
+
+
+    local boxEspOn=false
+    local boxEspDrawings={}
+
+    local function createBoxDrawing()
+        if not Drawing or not Drawing.new then return nil end
+        local ok,box=pcall(function()
+            local sq=Drawing.new("Square")
+            sq.Visible=false
+            sq.Thickness=1.5
+            sq.Filled=false
+            sq.Color=C.ACCENT
+            return sq
+        end)
+        return ok and box or nil
+    end
+
+    local function removeBoxDrawing(p)
+        local sq=boxEspDrawings[p]
+        if sq then
+            pcall(function() sq:Remove() end)
+            boxEspDrawings[p]=nil
+        end
+    end
+
+    local function clearBoxEsp()
+        for p,_ in pairs(boxEspDrawings) do
+            removeBoxDrawing(p)
+        end
+    end
+
+    local function updateBoxEsp()
+        if not boxEspOn then
+            for _,sq in pairs(boxEspDrawings) do
+                pcall(function() sq.Visible=false end)
+            end
+            return
+        end
+
+        local cam=workspace.CurrentCamera
+        if not cam then return end
+
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p~=player then
+                local sq=boxEspDrawings[p]
+                if not sq then
+                    sq=createBoxDrawing()
+                    if sq then boxEspDrawings[p]=sq end
+                end
+
+                local char=p.Character
+                local root=char and char:FindFirstChild("HumanoidRootPart")
+                local head=char and char:FindFirstChild("Head")
+
+                if sq and root and head then
+                    local topPos,topVis=cam:WorldToViewportPoint(head.Position+Vector3.new(0,0.8,0))
+                    local botPos,botVis=cam:WorldToViewportPoint(root.Position-Vector3.new(0,3,0))
+
+                    if topVis and botVis and topPos.Z>0 then
+                        local height=math.abs(botPos.Y-topPos.Y)
+                        local width=math.clamp(height*0.55,10,300)
+                        local centerX=(topPos.X+botPos.X)*0.5
+
+                        pcall(function()
+                            sq.Size=Vector2.new(width,height)
+                            sq.Position=Vector2.new(centerX-width*0.5,math.min(topPos.Y,botPos.Y))
+                            sq.Color=C.ACCENT
+                            sq.Visible=true
+                        end)
+                    else
+                        pcall(function() sq.Visible=false end)
+                    end
+                elseif sq then
+                    pcall(function() sq.Visible=false end)
+                end
+            end
+        end
+    end
+
+    toggleRow(espLeft,1,"Box ESP 2D","2D bounding box around players",nil,function(v)
+        boxEspOn=v
+        if not v then
+            clearBoxEsp()
+        end
+        setStatus(v and "BOX ESP 2D ON" or "BOX ESP 2D OFF")
+    end)
+
+    Players.PlayerRemoving:Connect(function(p)
+        removeBoxDrawing(p)
+    end)
+
+
+
     -- MISC*
 
-    local miscTab=newTab("Misc",4)
+    local miscTab=newTab("Misc",5)
 
     local miscLeft=column(miscTab,0,0.5,"Utilities")
 
@@ -2142,9 +2110,29 @@ local function Main()
 
 
 
+    buttonRow(miscRight,4,"COPY DISCORD INVITE",C.row,function()
+
+        if setclipboard then
+
+            pcall(setclipboard,DISCORD_INVITE)
+
+            setStatus("DISCORD INVITE COPIED")
+
+        else
+
+            print("DARK MOON Discord: "..DISCORD_INVITE)
+
+            setStatus("DISCORD PRINTED TO CONSOLE",C.sub)
+
+        end
+
+    end)
+
+
+
     -- SETTINGS*
 
-    local settingsTab=newTab("Settings",5)
+    local settingsTab=newTab("Settings",6)
 
     local settingsLeft=column(settingsTab,0,0.5,"CUSTOMIZE COLOURS")
 
@@ -2483,6 +2471,8 @@ local function Main()
 
         clearHighlights()
 
+        clearBoxEsp()
+
         gui:Destroy()
 
     end)
@@ -2601,8 +2591,6 @@ local function Main()
 
     player.CharacterAdded:Connect(function()
 
-        if floatOn then floatToggle.Set(false) end
-
         if hipOn then
 
             task.wait(0.5)
@@ -2618,6 +2606,8 @@ local function Main()
 
 
     RunService.RenderStepped:Connect(function()
+
+        updateBoxEsp()
 
         if fullbrightOn then
 
@@ -2651,9 +2641,11 @@ local function Main()
 
     setStatus("READY | RIGHT SHIFT: MENU")
 
-    notify("V6.2 Loaded!")
+    notify("DARK MOON V 1.2 Loaded!")
 
-    print("ADRIN'S SCRIPTS V6.2 LOADED")
+    print("DARK MOON V 1.2 LOADED | BY BIYXZND")
+
+    print("DISCORD: "..DISCORD_INVITE)
 
     print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP")
 
@@ -2665,7 +2657,7 @@ local ok,err=pcall(Main)
 
 if not ok then
 
-    warn("[Adrin's Scripts] Failed to load: "..tostring(err))
+    warn("[DARK MOON V 1.2] Failed to load: "..tostring(err))
 
     pcall(function()
 
@@ -2673,7 +2665,7 @@ if not ok then
 
         local gui=Instance.new("ScreenGui")
 
-        gui.Name="AdrinsScriptsError"
+        gui.Name="DarkMoonError"
 
         gui.ResetOnSpawn=false
 
@@ -2699,7 +2691,7 @@ if not ok then
 
         box.Font=Enum.Font.Gotham
 
-        box.Text="Adrin's Scripts failed to load:\n\n"..tostring(err).."\n\nClick to close"
+        box.Text="DARK MOON V 1.2 failed to load:\n\n"..tostring(err).."\n\nClick to close"
 
         box.Parent=gui
 
