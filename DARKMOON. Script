@@ -3,6 +3,8 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -19,49 +21,42 @@ local PanelSizes = {
 }
 
 local Settings = {
-	-- Combat / Aim
-	TargetLock = true,
-	SilentAim = true,
-	SilentAimMode = "Smart", -- "Smart" or "Strict"
-	AimPriority = "Murderer", -- "Murderer", "Sheriff", "Nearest"
-	AimPart = "Head", -- "Head" or "HumanoidRootPart"
-	IgnoreFOV = true,
-	WallCheck = false,
-	FOVRadius = 220,
-	Smoothness = 0.35,
-	Prediction = 0.08,
+	-- Combat
+	KillAllLoop = false,
+	FlingPower = 180,
 
 	-- Visuals
-	PanelSize = "Medium", -- "Small", "Medium", "Large"
 	RoleBoxESP = true,
 	RoleNameESP = true,
 	RoleTracerESP = false,
+	RoleHighlightESP = false,
 	GunESP = true,
 	Fullbright = false,
-	ShowAimMarker = true,
-	ShowFOV = false,
 
-	-- Movement & Utility
+	-- Movement
 	SprintEnabled = true,
 	Noclip = false,
 	InfJump = false,
 	WalkSpeed = 16,
 	JumpPower = 50,
+	Gravity = 196,
+
+	-- Teleport
 	AutoPickupGun = false,
-	KillAllLoop = false,
-	FlingPower = 180,
+
+	-- Settings
+	PanelSize = "Medium", -- "Small", "Medium", "Large"
+	AntiAFK = true,
 }
 
-local isAiming = false
 local isSprinting = false
 local isFlinging = false
 local isKillingAll = false
 local spectateIndex = 0
-local currentSilentTargetPos = nil
 local savedCollisionStates = {}
 local savedLighting = nil
 
--- Exact Role Colors: Innocent = Green, Murderer = Red, Sheriff = Blue
+-- Role Colors: Innocent = Green, Murderer = Red, Sheriff = Blue
 local RoleColors = {
 	Innocent = Color3.fromRGB(70, 255, 130),
 	Murderer = Color3.fromRGB(255, 65, 80),
@@ -72,17 +67,14 @@ local Theme = {
 	VoidBg = Color3.fromRGB(11, 12, 20),
 	SidebarBg = Color3.fromRGB(15, 16, 27),
 	CardBg = Color3.fromRGB(20, 22, 36),
-	CardHover = Color3.fromRGB(27, 30, 48),
 	MoonAccent = Color3.fromRGB(139, 124, 255),
 	MoonGlow = Color3.fromRGB(186, 176, 255),
 	TextBright = Color3.fromRGB(236, 235, 255),
 	TextMuted = Color3.fromRGB(145, 148, 180),
-	OffTrack = Color3.fromRGB(40, 43, 66),
-	OnTrack = Color3.fromRGB(125, 108, 255),
-	KnobColor = Color3.fromRGB(245, 245, 255),
+	OffPill = Color3.fromRGB(32, 35, 54),
+	OnPill = Color3.fromRGB(118, 98, 255),
 	BorderSoft = Color3.fromRGB(52, 55, 88),
 	GunColor = Color3.fromRGB(255, 210, 75),
-	AimMarkerColor = Color3.fromRGB(255, 75, 95),
 	FlingBtn = Color3.fromRGB(255, 85, 110),
 	TpBtn = Color3.fromRGB(110, 105, 245),
 }
@@ -92,13 +84,22 @@ if existingGui then
 	existingGui:Destroy()
 end
 
--- ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "DarkmoonUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
+
+-- Anti-AFK Listener
+LocalPlayer.Idled:Connect(function()
+	if Settings.AntiAFK then
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+	end
+end)
 
 -- Custom DARKMOON emblem logo builder
 local function buildDarkmoonLogo(parent, showOptionsTag)
@@ -191,40 +192,6 @@ local function buildDarkmoonLogo(parent, showOptionsTag)
 		BadgeStroke.Parent = Badge
 	end
 end
-
--- FOV Circle Overlay
-local FOVCircle = Instance.new("Frame")
-FOVCircle.Name = "FOVCircle"
-FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
-FOVCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
-FOVCircle.Size = UDim2.new(0, Settings.FOVRadius * 2, 0, Settings.FOVRadius * 2)
-FOVCircle.BackgroundTransparency = 1
-FOVCircle.Visible = Settings.ShowFOV
-FOVCircle.Parent = ScreenGui
-
-local FOVCorner = Instance.new("UICorner")
-FOVCorner.CornerRadius = UDim.new(1, 0)
-FOVCorner.Parent = FOVCircle
-
-local FOVStroke = Instance.new("UIStroke")
-FOVStroke.Color = Theme.MoonGlow
-FOVStroke.Thickness = 1.25
-FOVStroke.Transparency = 0.35
-FOVStroke.Parent = FOVCircle
-
--- Aim Target Marker
-local AimMarker = Instance.new("Frame")
-AimMarker.Name = "AimMarker"
-AimMarker.Size = UDim2.new(0, 12, 0, 12)
-AimMarker.AnchorPoint = Vector2.new(0.5, 0.5)
-AimMarker.BackgroundColor3 = Theme.AimMarkerColor
-AimMarker.BorderSizePixel = 0
-AimMarker.Visible = false
-AimMarker.Parent = ScreenGui
-
-local MarkerCorner = Instance.new("UICorner")
-MarkerCorner.CornerRadius = UDim.new(1, 0)
-MarkerCorner.Parent = AimMarker
 
 local initialSize = PanelSizes[Settings.PanelSize] or PanelSizes.Medium
 
@@ -424,8 +391,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if hum and hum.Health > 0 then
 			hum:ChangeState(Enum.HumanoidStateType.Jumping)
 		end
-	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-		isAiming = true
 	end
 end)
 
@@ -433,8 +398,6 @@ UserInputService.InputEnded:Connect(function(input)
 	if input.KeyCode == SPRINT_KEY then
 		isSprinting = false
 		applyMovementStats(LocalPlayer.Character)
-	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-		isAiming = false
 	end
 end)
 
@@ -567,6 +530,7 @@ local function createCategoryTab(tabName)
 	return Page
 end
 
+-- Pill Badge Toggle Button (ON / OFF)
 local function addToggleOption(page, titleText, subtitleText, settingKey, onChanged)
 	local Row = Instance.new("TextButton")
 	Row.Size = UDim2.new(1, -18, 0, 48)
@@ -582,12 +546,23 @@ local function addToggleOption(page, titleText, subtitleText, settingKey, onChan
 	local RowStroke = Instance.new("UIStroke")
 	RowStroke.Color = Theme.BorderSoft
 	RowStroke.Thickness = 1
-	RowStroke.Transparency = 0.5
+	RowStroke.Transparency = 0.45
 	RowStroke.Parent = Row
 
+	local AccentBar = Instance.new("Frame")
+	AccentBar.Size = UDim2.new(0, 3, 0, 26)
+	AccentBar.Position = UDim2.new(0, 4, 0.5, -13)
+	AccentBar.BackgroundColor3 = Theme.MoonAccent
+	AccentBar.BorderSizePixel = 0
+	AccentBar.Parent = Row
+
+	local AccentCorner = Instance.new("UICorner")
+	AccentCorner.CornerRadius = UDim.new(1, 0)
+	AccentCorner.Parent = AccentBar
+
 	local Title = Instance.new("TextLabel")
-	Title.Size = UDim2.new(1, -68, 0, 20)
-	Title.Position = UDim2.new(0, 12, 0, 6)
+	Title.Size = UDim2.new(1, -86, 0, 20)
+	Title.Position = UDim2.new(0, 14, 0, 6)
 	Title.BackgroundTransparency = 1
 	Title.Text = titleText
 	Title.TextColor3 = Theme.TextBright
@@ -597,8 +572,8 @@ local function addToggleOption(page, titleText, subtitleText, settingKey, onChan
 	Title.Parent = Row
 
 	local Sub = Instance.new("TextLabel")
-	Sub.Size = UDim2.new(1, -68, 0, 16)
-	Sub.Position = UDim2.new(0, 12, 0, 25)
+	Sub.Size = UDim2.new(1, -86, 0, 16)
+	Sub.Position = UDim2.new(0, 14, 0, 25)
 	Sub.BackgroundTransparency = 1
 	Sub.Text = subtitleText
 	Sub.TextColor3 = Theme.TextMuted
@@ -607,40 +582,67 @@ local function addToggleOption(page, titleText, subtitleText, settingKey, onChan
 	Sub.TextXAlignment = Enum.TextXAlignment.Left
 	Sub.Parent = Row
 
-	local Track = Instance.new("Frame")
-	Track.Size = UDim2.new(0, 40, 0, 22)
-	Track.Position = UDim2.new(1, -50, 0.5, -11)
-	Track.BackgroundColor3 = Theme.OffTrack
-	Track.Parent = Row
+	local StatusPill = Instance.new("Frame")
+	StatusPill.Name = "StatusPill"
+	StatusPill.Size = UDim2.new(0, 56, 0, 24)
+	StatusPill.Position = UDim2.new(1, -66, 0.5, -12)
+	StatusPill.BackgroundColor3 = Theme.OffPill
+	StatusPill.BorderSizePixel = 0
+	StatusPill.Parent = Row
 
-	local TrackCorner = Instance.new("UICorner")
-	TrackCorner.CornerRadius = UDim.new(1, 0)
-	TrackCorner.Parent = Track
+	local PillCorner = Instance.new("UICorner")
+	PillCorner.CornerRadius = UDim.new(0, 7)
+	PillCorner.Parent = StatusPill
 
-	local Knob = Instance.new("Frame")
-	Knob.Size = UDim2.new(0, 16, 0, 16)
-	Knob.Position = UDim2.new(0, 3, 0.5, -8)
-	Knob.BackgroundColor3 = Theme.KnobColor
-	Knob.Parent = Track
+	local PillStroke = Instance.new("UIStroke")
+	PillStroke.Color = Theme.BorderSoft
+	PillStroke.Thickness = 1
+	PillStroke.Parent = StatusPill
 
-	local KnobCorner = Instance.new("UICorner")
-	KnobCorner.CornerRadius = UDim.new(1, 0)
-	KnobCorner.Parent = Knob
+	local StatusDot = Instance.new("Frame")
+	StatusDot.Size = UDim2.new(0, 6, 0, 6)
+	StatusDot.Position = UDim2.new(0, 8, 0.5, -3)
+	StatusDot.BackgroundColor3 = Theme.TextMuted
+	StatusDot.BorderSizePixel = 0
+	StatusDot.Parent = StatusPill
+
+	local DotCorner = Instance.new("UICorner")
+	DotCorner.CornerRadius = UDim.new(1, 0)
+	DotCorner.Parent = StatusDot
+
+	local StatusText = Instance.new("TextLabel")
+	StatusText.Size = UDim2.new(1, -18, 1, 0)
+	StatusText.Position = UDim2.new(0, 16, 0, 0)
+	StatusText.BackgroundTransparency = 1
+	StatusText.Text = "OFF"
+	StatusText.TextColor3 = Theme.TextMuted
+	StatusText.Font = Enum.Font.GothamBlack
+	StatusText.TextSize = 10
+	StatusText.Parent = StatusPill
 
 	local function updateState(instant)
 		local active = Settings[settingKey]
-		local trackCol = active and Theme.OnTrack or Theme.OffTrack
-		local knobPos = active and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-		local borderCol = active and Theme.MoonAccent or Theme.BorderSoft
+		local pillBg = active and Theme.OnPill or Theme.OffPill
+		local pillBorder = active and Theme.MoonGlow or Theme.BorderSoft
+		local dotColor = active and Color3.fromRGB(115, 255, 165) or Theme.TextMuted
+		local txtColor = active and Theme.TextBright or Theme.TextMuted
+		local rowBorder = active and Theme.MoonAccent or Theme.BorderSoft
+
+		StatusText.Text = active and "ON" or "OFF"
+		AccentBar.Visible = active
 
 		if instant then
-			Track.BackgroundColor3 = trackCol
-			Knob.Position = knobPos
-			RowStroke.Color = borderCol
+			StatusPill.BackgroundColor3 = pillBg
+			PillStroke.Color = pillBorder
+			StatusDot.BackgroundColor3 = dotColor
+			StatusText.TextColor3 = txtColor
+			RowStroke.Color = rowBorder
 		else
-			TweenService:Create(Track, tweenInfo, { BackgroundColor3 = trackCol }):Play()
-			TweenService:Create(Knob, tweenInfo, { Position = knobPos }):Play()
-			TweenService:Create(RowStroke, tweenInfo, { Color = borderCol }):Play()
+			TweenService:Create(StatusPill, tweenInfo, { BackgroundColor3 = pillBg }):Play()
+			TweenService:Create(PillStroke, tweenInfo, { Color = pillBorder }):Play()
+			TweenService:Create(StatusDot, tweenInfo, { BackgroundColor3 = dotColor }):Play()
+			TweenService:Create(StatusText, tweenInfo, { TextColor3 = txtColor }):Play()
+			TweenService:Create(RowStroke, tweenInfo, { Color = rowBorder }):Play()
 		end
 	end
 
@@ -692,7 +694,7 @@ local function addStepperOption(page, titleText, options, labels, settingKey, on
 	local PrevBtn = Instance.new("TextButton")
 	PrevBtn.Size = UDim2.new(0, 24, 0, 24)
 	PrevBtn.Position = UDim2.new(1, -134, 0.5, -12)
-	PrevBtn.BackgroundColor3 = Theme.OffTrack
+	PrevBtn.BackgroundColor3 = Theme.OffPill
 	PrevBtn.Text = "<"
 	PrevBtn.TextColor3 = Theme.MoonGlow
 	PrevBtn.Font = Enum.Font.GothamBold
@@ -715,7 +717,7 @@ local function addStepperOption(page, titleText, options, labels, settingKey, on
 	local NextBtn = Instance.new("TextButton")
 	NextBtn.Size = UDim2.new(0, 24, 0, 24)
 	NextBtn.Position = UDim2.new(1, -34, 0.5, -12)
-	NextBtn.BackgroundColor3 = Theme.OffTrack
+	NextBtn.BackgroundColor3 = Theme.OffPill
 	NextBtn.Text = ">"
 	NextBtn.TextColor3 = Theme.MoonGlow
 	NextBtn.Font = Enum.Font.GothamBold
@@ -792,7 +794,7 @@ local function addSliderOption(page, titleText, minVal, maxVal, decimals, settin
 	local BarBg = Instance.new("TextButton")
 	BarBg.Size = UDim2.new(1, -24, 0, 8)
 	BarBg.Position = UDim2.new(0, 12, 0, 33)
-	BarBg.BackgroundColor3 = Theme.OffTrack
+	BarBg.BackgroundColor3 = Theme.OffPill
 	BarBg.Text = ""
 	BarBg.AutoButtonColor = false
 	BarBg.Parent = Row
@@ -877,7 +879,7 @@ local function addActionOption(page, titleText, buttonText, onClick)
 	local Btn = Instance.new("TextButton")
 	Btn.Size = UDim2.new(0, 96, 0, 26)
 	Btn.Position = UDim2.new(1, -108, 0.5, -13)
-	Btn.BackgroundColor3 = Theme.OnTrack
+	Btn.BackgroundColor3 = Theme.OnPill
 	Btn.Text = buttonText
 	Btn.TextColor3 = Theme.TextBright
 	Btn.Font = Enum.Font.GothamBold
@@ -889,7 +891,7 @@ local function addActionOption(page, titleText, buttonText, onClick)
 	BtnCorner.Parent = Btn
 
 	Btn.MouseButton1Click:Connect(function()
-		if onClick then onClick() end
+		if onClick then onClick(Btn) end
 	end)
 end
 
@@ -923,7 +925,7 @@ local function addSpectateOption(page, onCycle)
 	local PrevBtn = Instance.new("TextButton")
 	PrevBtn.Size = UDim2.new(0, 26, 0, 24)
 	PrevBtn.Position = UDim2.new(1, -138, 0.5, -12)
-	PrevBtn.BackgroundColor3 = Theme.OffTrack
+	PrevBtn.BackgroundColor3 = Theme.OffPill
 	PrevBtn.Text = "<"
 	PrevBtn.TextColor3 = Theme.MoonGlow
 	PrevBtn.Font = Enum.Font.GothamBold
@@ -948,7 +950,7 @@ local function addSpectateOption(page, onCycle)
 	local NextBtn = Instance.new("TextButton")
 	NextBtn.Size = UDim2.new(0, 26, 0, 24)
 	NextBtn.Position = UDim2.new(1, -34, 0.5, -12)
-	NextBtn.BackgroundColor3 = Theme.OffTrack
+	NextBtn.BackgroundColor3 = Theme.OffPill
 	NextBtn.Text = ">"
 	NextBtn.TextColor3 = Theme.MoonGlow
 	NextBtn.Font = Enum.Font.GothamBold
@@ -1103,7 +1105,6 @@ local function flingPlayer(targetPlayer)
 	isFlinging = false
 end
 
--- Equip equipped/backpack weapon tool if available and cycle targets
 local function equipAttackTool()
 	local char = LocalPlayer.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -1297,6 +1298,7 @@ local function findActiveMurderer()
 	return findActiveRolePlayer("Murderer")
 end
 
+-- Dropped Gun Detector & Reliable Pickup Helper
 local function isPlayerOwnedDescendant(inst)
 	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr.Character and inst:IsDescendantOf(plr.Character) then
@@ -1325,12 +1327,14 @@ local function getDroppedGunTarget()
 		if obj:IsA("Tool") and isGunKeyword(obj.Name) then
 			local part = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart", true)
 			if part then
-				return obj, part
+				local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+				return obj, part, prompt
 			end
 		elseif (obj:IsA("BasePart") or obj:IsA("Model")) and isGunKeyword(obj.Name) then
 			local part = obj:IsA("BasePart") and obj or (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true))
 			if part then
-				return obj, part
+				local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+				return obj, part, prompt
 			end
 		elseif obj:IsA("ProximityPrompt") and obj.Parent and isGunKeyword(obj.Parent.Name) then
 			local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart", true)
@@ -1343,54 +1347,55 @@ local function getDroppedGunTarget()
 	return nil, nil, nil
 end
 
--- Build Tabs & Options
+local function alreadyOwnsGun()
+	local char = LocalPlayer.Character
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	return hasRoleTool(char, "gun") or hasRoleTool(backpack, "gun")
+		or hasRoleTool(char, "revolver") or hasRoleTool(backpack, "revolver")
+end
+
+local function triggerGunTouch(myRoot, gunPart)
+	if not myRoot or not gunPart then return end
+	if typeof(firetouchinterest) == "function" then
+		pcall(function()
+			firetouchinterest(myRoot, gunPart, 0)
+			task.wait()
+			firetouchinterest(myRoot, gunPart, 1)
+		end)
+	end
+end
+
+-- Build 5 Renamed Tabs: Combat, Visuals, Movement, Teleport, Settings
 local CombatPage = createCategoryTab("Combat")
 local VisualsPage = createCategoryTab("Visuals")
 local MovementPage = createCategoryTab("Movement")
-local UtilityPage = createCategoryTab("Utility")
-local PlayersPage = createCategoryTab("Players")
+local TeleportPage = createCategoryTab("Teleport")
+local SettingsPage = createCategoryTab("Settings")
 
-addToggleOption(CombatPage, "Silent Aim", "Redirect shots to selected target", "SilentAim")
-addStepperOption(CombatPage, "Silent Aim Mode", { "Smart", "Strict" }, { "Smart", "Strict Murder" }, "SilentAimMode")
-addToggleOption(CombatPage, "Target Lock (RMB)", "Hold Right-Click to lock camera", "TargetLock")
-addStepperOption(CombatPage, "Aim Target", { "Murderer", "Sheriff", "Nearest" }, { "Murderer", "Sheriff", "Nearest" }, "AimPriority")
-addStepperOption(CombatPage, "Aim Part", { "Head", "HumanoidRootPart" }, { "Head", "Torso" }, "AimPart")
-addToggleOption(CombatPage, "Ignore FOV", "Target anywhere on screen", "IgnoreFOV")
-addToggleOption(CombatPage, "Wall Check", "Require clear line of sight", "WallCheck")
-addSliderOption(CombatPage, "Lock Smoothness", 0.05, 1.0, 2, "Smoothness")
-addSliderOption(CombatPage, "Velocity Lead", 0, 0.25, 2, "Prediction")
-
-local syncPanelSizeStepper = addStepperOption(
-	VisualsPage,
-	"Panel Size",
-	{ "Small", "Medium", "Large" },
-	{ "Small", "Medium", "Large" },
-	"PanelSize",
-	function(sizeKey)
-		applyPanelSize(sizeKey)
-	end
-)
-table.insert(SizeListeners, function(sizeKey)
-	if syncPanelSizeStepper then
-		syncPanelSizeStepper(sizeKey)
+-- Combat Tab
+addToggleOption(CombatPage, "Kill All Loop", "Repeat until all down or toggled off", "KillAllLoop", function(enabled)
+	if enabled and not isKillingAll then
+		task.spawn(function()
+			killAllTargets(true)
+		end)
 	end
 end)
+addActionOption(CombatPage, "Kill All Once", "Attack All", function()
+	killAllTargets(false)
+end)
+addSliderOption(CombatPage, "Fling Power", 80, 360, 0, "FlingPower")
 
+-- Visuals Tab
 addToggleOption(VisualsPage, "2D Role Box", "Innocent Green • Murder Red • Sheriff Blue", "RoleBoxESP")
 addToggleOption(VisualsPage, "Role Name & Dist", "Show role and distance tags", "RoleNameESP")
 addToggleOption(VisualsPage, "Role Tracers", "Draw lines to active players", "RoleTracerESP")
+addToggleOption(VisualsPage, "Role Chams Glow", "Highlight player bodies through walls", "RoleHighlightESP")
 addToggleOption(VisualsPage, "Dropped Gun ESP", "Highlight dropped gun through walls", "GunESP")
 addToggleOption(VisualsPage, "Fullbright", "Brighten dark areas and shadows", "Fullbright", function(enabled)
 	applyFullbright(enabled)
 end)
-addToggleOption(VisualsPage, "Aim Marker", "Show target dot on screen", "ShowAimMarker")
-addToggleOption(VisualsPage, "Show FOV Ring", "Display target lock radius circle", "ShowFOV", function(enabled)
-	FOVCircle.Visible = enabled
-end)
-addSliderOption(VisualsPage, "FOV Radius", 60, 320, 0, "FOVRadius", function(val)
-	FOVCircle.Size = UDim2.new(0, val * 2, 0, val * 2)
-end)
 
+-- Movement Tab
 addToggleOption(MovementPage, "Sprint (LeftShift)", "Hold LeftShift for speed boost", "SprintEnabled", function()
 	applyMovementStats(LocalPlayer.Character)
 end)
@@ -1406,40 +1411,64 @@ end)
 addSliderOption(MovementPage, "Jump Power", 50, 120, 0, "JumpPower", function()
 	applyMovementStats(LocalPlayer.Character)
 end)
+addSliderOption(MovementPage, "World Gravity", 35, 300, 0, "Gravity", function(val)
+	workspace.Gravity = val
+end)
 
-addToggleOption(UtilityPage, "Auto Pickup Gun", "Snap directly to dropped gun", "AutoPickupGun")
-addToggleOption(UtilityPage, "Kill All Loop", "Repeat until all down or toggled off", "KillAllLoop", function(enabled)
-	if enabled and not isKillingAll then
-		task.spawn(function()
-			killAllTargets(true)
-		end)
-	end
-end)
-addActionOption(UtilityPage, "Kill All Once", "Attack All", function()
-	killAllTargets(false)
-end)
-addActionOption(UtilityPage, "TP to Murder", "Teleport", function()
+-- Teleport Tab (Quick TP + Auto Gun + Live Player List)
+addToggleOption(TeleportPage, "Auto Pickup Gun", "Snap & grab dropped gun immediately", "AutoPickupGun")
+addActionOption(TeleportPage, "TP to Murder", "Teleport", function()
 	teleportToPlayer(findActiveRolePlayer("Murderer"))
 end)
-addActionOption(UtilityPage, "TP to Sheriff", "Teleport", function()
+addActionOption(TeleportPage, "TP to Sheriff", "Teleport", function()
 	teleportToPlayer(findActiveRolePlayer("Sheriff"))
 end)
-addSliderOption(UtilityPage, "Fling Power", 80, 360, 0, "FlingPower")
-addSpectateOption(UtilityPage, cycleSpectate)
-addActionOption(UtilityPage, "Reset Character", "Respawn", function()
+addSpectateOption(TeleportPage, cycleSpectate)
+
+-- Settings Tab
+local syncPanelSizeStepper = addStepperOption(
+	SettingsPage,
+	"Panel Size",
+	{ "Small", "Medium", "Large" },
+	{ "Small", "Medium", "Large" },
+	"PanelSize",
+	function(sizeKey)
+		applyPanelSize(sizeKey)
+	end
+)
+table.insert(SizeListeners, function(sizeKey)
+	if syncPanelSizeStepper then
+		syncPanelSizeStepper(sizeKey)
+	end
+end)
+
+addToggleOption(SettingsPage, "Anti-AFK", "Prevent idle disconnect kick", "AntiAFK")
+addActionOption(SettingsPage, "Rejoin Server", "Rejoin", function(btn)
+	btn.Text = "..."
+	pcall(function()
+		TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+	end)
+end)
+addActionOption(SettingsPage, "Server Hop", "Switch", function(btn)
+	btn.Text = "..."
+	pcall(function()
+		TeleportService:Teleport(game.PlaceId, LocalPlayer)
+	end)
+end)
+addActionOption(SettingsPage, "Reset Character", "Respawn", function()
 	spectateIndex = 0
 	local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 	if hum then hum.Health = 0 end
 end)
 
--- Quick Fling Murderer Top Banner inside Players Tab
+-- Quick Fling Murderer Banner inside Combat Tab
 local QuickMurderBanner = Instance.new("Frame")
 QuickMurderBanner.Name = "QuickMurderBanner"
 QuickMurderBanner.LayoutOrder = 0
 QuickMurderBanner.Size = UDim2.new(1, -18, 0, 44)
 QuickMurderBanner.BackgroundColor3 = Theme.CardBg
 QuickMurderBanner.ClipsDescendants = true
-QuickMurderBanner.Parent = PlayersPage
+QuickMurderBanner.Parent = CombatPage
 
 local QuickCorner = Instance.new("UICorner")
 QuickCorner.CornerRadius = UDim.new(0, 9)
@@ -1505,9 +1534,9 @@ QuickFlingBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Live Player Role List with Banner, TP & Click-to-Fling inside Players Tab
+-- Live Player Role List with Banner, TP & Click-to-Fling inside Teleport Tab
 local PlayerListCards = {}
-local nextCardOrder = 1
+local nextCardOrder = 10
 
 local function createPlayerListCard(player)
 	if PlayerListCards[player] then return PlayerListCards[player] end
@@ -1519,7 +1548,7 @@ local function createPlayerListCard(player)
 	Card.Size = UDim2.new(1, -18, 0, 52)
 	Card.BackgroundColor3 = Theme.CardBg
 	Card.ClipsDescendants = true
-	Card.Parent = PlayersPage
+	Card.Parent = TeleportPage
 
 	local CardCorner = Instance.new("UICorner")
 	CardCorner.CornerRadius = UDim.new(0, 9)
@@ -1778,7 +1807,21 @@ local function getVisuals(player)
 	Tracer.Visible = false
 	Tracer.Parent = ESPFolder
 
-	Visuals[player] = { Box = Box, Stroke = Stroke, Tag = Tag, Tracer = Tracer }
+	local CharHighlight = Instance.new("Highlight")
+	CharHighlight.Name = "DarkmoonRoleHighlight"
+	CharHighlight.FillTransparency = 0.65
+	CharHighlight.OutlineTransparency = 0.1
+	CharHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	CharHighlight.Enabled = false
+	CharHighlight.Parent = ESPFolder
+
+	Visuals[player] = {
+		Box = Box,
+		Stroke = Stroke,
+		Tag = Tag,
+		Tracer = Tracer,
+		CharHighlight = CharHighlight,
+	}
 	return Visuals[player]
 end
 
@@ -1787,115 +1830,10 @@ Players.PlayerRemoving:Connect(function(player)
 		Visuals[player].Box:Destroy()
 		Visuals[player].Tag:Destroy()
 		Visuals[player].Tracer:Destroy()
+		Visuals[player].CharHighlight:Destroy()
 		Visuals[player] = nil
 	end
 end)
-
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Exclude
-
-local function hasLineOfSight(targetPart, targetCharacter)
-	if not Settings.WallCheck then return true end
-	rayParams.FilterDescendantsInstances = { LocalPlayer.Character, targetCharacter }
-	local origin = Camera.CFrame.Position
-	local direction = targetPart.Position - origin
-	return workspace:Raycast(origin, direction, rayParams) == nil
-end
-
-local function getAimPartForCharacter(char)
-	if not char then return nil end
-	return char:FindFirstChild(Settings.AimPart) or char:FindFirstChild("HumanoidRootPart")
-end
-
-local function computePredictedPosition(targetPart)
-	return targetPart.Position + (targetPart.AssemblyLinearVelocity * Settings.Prediction)
-end
-
-local function findCandidateTarget(requireRoleMatch, enforceScreenChecks)
-	local myChar = LocalPlayer.Character
-	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-	if not myRoot then return nil end
-
-	local viewportCenter = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
-	local bestPart = nil
-	local bestScore = math.huge
-
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player == LocalPlayer then continue end
-
-		local role = getRole(player)
-		if requireRoleMatch then
-			if Settings.AimPriority == "Murderer" and role ~= "Murderer" then
-				continue
-			elseif Settings.AimPriority == "Sheriff" and role ~= "Sheriff" then
-				continue
-			end
-		end
-
-		local char = player.Character
-		local hum = char and char:FindFirstChildOfClass("Humanoid")
-		local aimPart = getAimPartForCharacter(char)
-
-		if char and hum and hum.Health > 0 and aimPart then
-			local screenPos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
-			local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - viewportCenter).Magnitude
-			local passesScreen = true
-			if enforceScreenChecks then
-				passesScreen = onScreen and (Settings.IgnoreFOV or (screenDist <= Settings.FOVRadius))
-			end
-
-			if passesScreen and hasLineOfSight(aimPart, char) then
-				local metric = (Settings.AimPriority == "Nearest") and (aimPart.Position - myRoot.Position).Magnitude or screenDist
-				if metric < bestScore then
-					bestScore = metric
-					bestPart = aimPart
-				end
-			end
-		end
-	end
-
-	return bestPart
-end
-
-local function getBestAimTarget()
-	local matched = findCandidateTarget(true, true)
-	if matched then return matched end
-	if Settings.IgnoreFOV then
-		return findCandidateTarget(false, true)
-	end
-	return nil
-end
-
-local function getSilentAimTargetPart()
-	if Settings.AimPriority == "Murderer" or Settings.SilentAimMode == "Strict" then
-		local murderPlr = findActiveMurderer()
-		if murderPlr then
-			local mPart = getAimPartForCharacter(murderPlr.Character)
-			if mPart and hasLineOfSight(mPart, murderPlr.Character) then
-				return mPart
-			end
-		end
-		if Settings.SilentAimMode == "Strict" then
-			return nil
-		end
-	end
-
-	return findCandidateTarget(true, false) or findCandidateTarget(false, false)
-end
-
-_G.DarkmoonGetAimPoint = function(fallbackWorldPos)
-	if not Settings.SilentAim then
-		return fallbackWorldPos
-	end
-	local sPart = getSilentAimTargetPart()
-	if sPart then
-		return computePredictedPosition(sPart)
-	end
-	if currentSilentTargetPos then
-		return currentSilentTargetPos
-	end
-	return fallbackWorldPos
-end
 
 RunService.Stepped:Connect(function()
 	applyNoclipStep(LocalPlayer.Character)
@@ -1960,6 +1898,15 @@ RunService.RenderStepped:Connect(function()
 
 		local v = getVisuals(player)
 		if isAlive then
+			if Settings.RoleHighlightESP and char then
+				v.CharHighlight.Adornee = char
+				v.CharHighlight.FillColor = color
+				v.CharHighlight.OutlineColor = color
+				v.CharHighlight.Enabled = true
+			else
+				v.CharHighlight.Enabled = false
+			end
+
 			local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
 			if onScreen then
 				local top = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2.5, 0))
@@ -2010,57 +1957,43 @@ RunService.RenderStepped:Connect(function()
 			v.Box.Visible = false
 			v.Tag.Visible = false
 			v.Tracer.Visible = false
+			v.CharHighlight.Enabled = false
 		end
-	end
-
-	local silentPart = Settings.SilentAim and getSilentAimTargetPart() or nil
-	currentSilentTargetPos = silentPart and computePredictedPosition(silentPart) or nil
-
-	local markerOrLockPart = silentPart or (Settings.TargetLock and getBestAimTarget()) or nil
-	if markerOrLockPart then
-		local predictedPos = computePredictedPosition(markerOrLockPart)
-		if Settings.ShowAimMarker then
-			local mPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
-			if onScreen then
-				AimMarker.Position = UDim2.new(0, mPos.X, 0, mPos.Y)
-				AimMarker.Visible = true
-			else
-				AimMarker.Visible = false
-			end
-		else
-			AimMarker.Visible = false
-		end
-
-		if Settings.TargetLock and isAiming then
-			local camPos = Camera.CFrame.Position
-			local desiredCFrame = CFrame.lookAt(camPos, predictedPos)
-			Camera.CFrame = Camera.CFrame:Lerp(desiredCFrame, Settings.Smoothness)
-		end
-	else
-		AimMarker.Visible = false
 	end
 end)
 
+-- Reliable Auto Pickup Gun Loop
 task.spawn(function()
-	while task.wait(0.15) do
-		if isFlinging or isKillingAll then continue end
+	while task.wait(0.1) do
+		if isFlinging or isKillingAll or not Settings.AutoPickupGun then continue end
+		if alreadyOwnsGun() then continue end
 
 		local char = LocalPlayer.Character
 		local hrp = char and char:FindFirstChild("HumanoidRootPart")
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if not hrp or not hum or hum.Health <= 0 then continue end
 
-		if Settings.AutoPickupGun then
-			local _, gunPart, prompt = getDroppedGunTarget()
-			if gunPart then
-				teleportToCFrame(CFrame.new(gunPart.Position + Vector3.new(0, 1.2, 0)))
-				if prompt then
-					pcall(function()
+		local gunObj, gunPart, prompt = getDroppedGunTarget()
+		if gunObj and gunPart and gunPart.Parent then
+			local savedCFrame = hrp.CFrame
+			teleportToCFrame(CFrame.new(gunPart.Position + Vector3.new(0, 1, 0)))
+			triggerGunTouch(hrp, gunPart)
+
+			if prompt and prompt.Parent then
+				pcall(function()
+					if typeof(fireproximityprompt) == "function" then
+						fireproximityprompt(prompt)
+					else
 						prompt:InputHoldBegin()
 						task.wait(0.05)
 						prompt:InputHoldEnd()
-					end)
-				end
+					end
+				end)
+			end
+
+			task.wait(0.08)
+			if alreadyOwnsGun() and hrp and hrp.Parent then
+				teleportToCFrame(savedCFrame + Vector3.new(0, 1.5, 0))
 			end
 		end
 	end
