@@ -22,10 +22,21 @@ local PanelSizes = {
 
 local Settings = {
 	-- Combat
+	Aimbot = false,
+	SilentAim = false,
+	TargetMurder = true,
+	AimPart = "Head", -- "Head" or "HumanoidRootPart"
+	IgnoreFOV = false,
+	WallCheck = false,
+	FOVRadius = 180,
+	AimSmoothness = 0.35,
+	Prediction = 0.08,
 	KillAllLoop = false,
 	FlingPower = 180,
 
 	-- Visuals
+	ShowFOV = true,
+	ShowTargetIndicator = true,
 	RoleBoxESP = true,
 	RoleNameESP = true,
 	RoleTracerESP = false,
@@ -50,6 +61,8 @@ local Settings = {
 }
 
 local isSprinting = false
+local isRightClickAiming = false
+local isPrimaryFiring = false
 local isFlinging = false
 local isKillingAll = false
 local spectateIndex = 0
@@ -90,6 +103,57 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
+
+-- On-Screen FOV Circle
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Name = "DarkmoonFOVCircle"
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+FOVCircle.Size = UDim2.new(0, Settings.FOVRadius * 2, 0, Settings.FOVRadius * 2)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = Settings.ShowFOV and (Settings.Aimbot or Settings.SilentAim)
+FOVCircle.Parent = ScreenGui
+
+local FOVCorner = Instance.new("UICorner")
+FOVCorner.CornerRadius = UDim.new(1, 0)
+FOVCorner.Parent = FOVCircle
+
+local FOVStroke = Instance.new("UIStroke")
+FOVStroke.Color = Theme.MoonGlow
+FOVStroke.Thickness = 1.4
+FOVStroke.Transparency = 0.25
+FOVStroke.Parent = FOVCircle
+
+-- On-Screen Target Indicator (Ring + Center Dot)
+local TargetIndicator = Instance.new("Frame")
+TargetIndicator.Name = "DarkmoonTargetIndicator"
+TargetIndicator.Size = UDim2.new(0, 22, 0, 22)
+TargetIndicator.AnchorPoint = Vector2.new(0.5, 0.5)
+TargetIndicator.BackgroundTransparency = 1
+TargetIndicator.Visible = false
+TargetIndicator.Parent = ScreenGui
+
+local IndicatorCorner = Instance.new("UICorner")
+IndicatorCorner.CornerRadius = UDim.new(1, 0)
+IndicatorCorner.Parent = TargetIndicator
+
+local IndicatorStroke = Instance.new("UIStroke")
+IndicatorStroke.Color = RoleColors.Murderer
+IndicatorStroke.Thickness = 1.8
+IndicatorStroke.Transparency = 0.1
+IndicatorStroke.Parent = TargetIndicator
+
+local IndicatorDot = Instance.new("Frame")
+IndicatorDot.Name = "CenterDot"
+IndicatorDot.Size = UDim2.new(0, 6, 0, 6)
+IndicatorDot.Position = UDim2.new(0.5, -3, 0.5, -3)
+IndicatorDot.BackgroundColor3 = RoleColors.Murderer
+IndicatorDot.BorderSizePixel = 0
+IndicatorDot.Parent = TargetIndicator
+
+local DotInnerCorner = Instance.new("UICorner")
+DotInnerCorner.CornerRadius = UDim.new(1, 0)
+DotInnerCorner.Parent = IndicatorDot
 
 -- Anti-AFK Listener
 LocalPlayer.Idled:Connect(function()
@@ -310,6 +374,10 @@ ResizeBtn.MouseButton1Click:Connect(function()
 	applyPanelSize(nextKey)
 end)
 
+local function syncFOVVisibility()
+	FOVCircle.Visible = Settings.ShowFOV and (Settings.Aimbot or Settings.SilentAim)
+end
+
 local function applyMovementStats(character)
 	local hum = character and character:FindFirstChildOfClass("Humanoid")
 	if not hum then return end
@@ -380,6 +448,9 @@ MinimizeBtn.MouseButton1Click:Connect(function() setPanelOpen(false) end)
 ReopenBtn.MouseButton1Click:Connect(function() setPanelOpen(true) end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isPrimaryFiring = true
+	end
 	if gameProcessed then return end
 	if input.KeyCode == TOGGLE_KEY then
 		setPanelOpen(not MainFrame.Visible)
@@ -391,13 +462,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if hum and hum.Health > 0 then
 			hum:ChangeState(Enum.HumanoidStateType.Jumping)
 		end
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isRightClickAiming = true
 	end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-	if input.KeyCode == SPRINT_KEY then
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isPrimaryFiring = false
+	elseif input.KeyCode == SPRINT_KEY then
 		isSprinting = false
 		applyMovementStats(LocalPlayer.Character)
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isRightClickAiming = false
 	end
 end)
 
@@ -1298,6 +1375,77 @@ local function findActiveMurderer()
 	return findActiveRolePlayer("Murderer")
 end
 
+-- Aimbot & Silent Aim Target Resolution (Lightweight & Cross-Platform)
+local losParams = RaycastParams.new()
+losParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function hasClearLineOfSight(targetPart, targetCharacter)
+	if not Settings.WallCheck then return true end
+	losParams.FilterDescendantsInstances = { LocalPlayer.Character, targetCharacter }
+	local origin = Camera.CFrame.Position
+	local offset = targetPart.Position - origin
+	return workspace:Raycast(origin, offset, losParams) == nil
+end
+
+local function getCharacterAimPart(char)
+	if not char then return nil end
+	return char:FindFirstChild(Settings.AimPart) or char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getPredictedAimPos(part)
+	return part.Position + (part.AssemblyLinearVelocity * Settings.Prediction)
+end
+
+local function selectBestAimTarget()
+	local myChar = LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	if not myRoot then return nil, nil end
+
+	local center = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
+	local bestPart, bestRole = nil, nil
+	local bestScore = math.huge
+
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr == LocalPlayer then continue end
+		local role = getRole(plr)
+		if Settings.TargetMurder and role ~= "Murderer" then
+			continue
+		end
+
+		local char = plr.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local part = getCharacterAimPart(char)
+		if char and hum and hum.Health > 0 and part then
+			local screenPt, onScreen = Camera:WorldToViewportPoint(part.Position)
+			if not onScreen then continue end
+
+			local screenDist = (Vector2.new(screenPt.X, screenPt.Y) - center).Magnitude
+			if not Settings.IgnoreFOV and screenDist > Settings.FOVRadius then
+				continue
+			end
+
+			if hasClearLineOfSight(part, char) and screenDist < bestScore then
+				bestScore = screenDist
+				bestPart = part
+				bestRole = role
+			end
+		end
+	end
+
+	return bestPart, bestRole
+end
+
+_G.DarkmoonGetAimPoint = function(fallbackWorldPos)
+	if not Settings.SilentAim then
+		return fallbackWorldPos
+	end
+	local part = selectBestAimTarget()
+	if part then
+		return getPredictedAimPos(part)
+	end
+	return fallbackWorldPos
+end
+
 -- Dropped Gun Detector & Reliable Pickup Helper
 local function isPlayerOwnedDescendant(inst)
 	for _, plr in ipairs(Players:GetPlayers()) do
@@ -1373,6 +1521,17 @@ local TeleportPage = createCategoryTab("Teleport")
 local SettingsPage = createCategoryTab("Settings")
 
 -- Combat Tab
+addToggleOption(CombatPage, "Aimbot", "Smooth camera lock on PC & mobile", "Aimbot", syncFOVVisibility)
+addToggleOption(CombatPage, "Silent Aim", "Redirect shots to active target", "SilentAim", syncFOVVisibility)
+addToggleOption(CombatPage, "Target Murder", "Prioritize Murderer for aim & indicator", "TargetMurder")
+addStepperOption(CombatPage, "Aim Part", { "Head", "HumanoidRootPart" }, { "Head", "Torso" }, "AimPart")
+addToggleOption(CombatPage, "Ignore FOV", "Lock onto targets outside FOV ring", "IgnoreFOV")
+addToggleOption(CombatPage, "Wall Check", "Require clear line of sight", "WallCheck")
+addSliderOption(CombatPage, "FOV Radius", 60, 320, 0, "FOVRadius", function(val)
+	FOVCircle.Size = UDim2.new(0, val * 2, 0, val * 2)
+end)
+addSliderOption(CombatPage, "Aim Smoothness", 0.05, 1.0, 2, "AimSmoothness")
+addSliderOption(CombatPage, "Velocity Lead", 0, 0.25, 2, "Prediction")
 addToggleOption(CombatPage, "Kill All Loop", "Repeat until all down or toggled off", "KillAllLoop", function(enabled)
 	if enabled and not isKillingAll then
 		task.spawn(function()
@@ -1386,6 +1545,8 @@ end)
 addSliderOption(CombatPage, "Fling Power", 80, 360, 0, "FlingPower")
 
 -- Visuals Tab
+addToggleOption(VisualsPage, "FOV Circle", "Show on-screen aim radius ring", "ShowFOV", syncFOVVisibility)
+addToggleOption(VisualsPage, "Target Indicator", "Show ring & dot on locked target", "ShowTargetIndicator")
 addToggleOption(VisualsPage, "2D Role Box", "Innocent Green • Murder Red • Sheriff Blue", "RoleBoxESP")
 addToggleOption(VisualsPage, "Role Name & Dist", "Show role and distance tags", "RoleNameESP")
 addToggleOption(VisualsPage, "Role Tracers", "Draw lines to active players", "RoleTracerESP")
@@ -1668,7 +1829,7 @@ local function createPlayerListCard(player)
 
 		local FlingCorner = Instance.new("UICorner")
 		FlingCorner.CornerRadius = UDim.new(0, 7)
-		FlingCorner.Parent = FlingBtn
+		FlingBtn.Parent = Card
 
 		FlingBtn.MouseButton1Click:Connect(function()
 			if isFlinging then return end
@@ -1709,6 +1870,7 @@ Players.PlayerAdded:Connect(createPlayerListCard)
 Players.PlayerRemoving:Connect(removePlayerListCard)
 
 selectTab("Combat")
+syncFOVVisibility()
 
 -- ESP Visuals Setup
 local ESPFolder = Instance.new("Folder")
@@ -1839,7 +2001,7 @@ RunService.Stepped:Connect(function()
 	applyNoclipStep(LocalPlayer.Character)
 end)
 
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
 	local myChar = LocalPlayer.Character
 	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 	local bottomCenter = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.92)
@@ -1959,6 +2121,38 @@ RunService.RenderStepped:Connect(function()
 			v.Tracer.Visible = false
 			v.CharHighlight.Enabled = false
 		end
+	end
+
+	-- Aimbot & Silent Aim Target Indicator
+	local aimActive = Settings.Aimbot or Settings.SilentAim
+	local aimPart, aimRole = aimActive and selectBestAimTarget() or nil, nil
+	if aimActive then
+		aimPart, aimRole = selectBestAimTarget()
+	end
+
+	if aimPart then
+		local predictedWorld = getPredictedAimPos(aimPart)
+		local screenPt, onScreen = Camera:WorldToViewportPoint(predictedWorld)
+		local indColor = RoleColors[aimRole] or Theme.MoonGlow
+
+		if Settings.ShowTargetIndicator and onScreen then
+			TargetIndicator.Position = UDim2.new(0, screenPt.X, 0, screenPt.Y)
+			IndicatorStroke.Color = indColor
+			IndicatorDot.BackgroundColor3 = indColor
+			TargetIndicator.Visible = true
+		else
+			TargetIndicator.Visible = false
+		end
+
+		local shouldLockCamera = Settings.Aimbot and (isRightClickAiming or (isPrimaryFiring and UserInputService.TouchEnabled))
+		if shouldLockCamera then
+			local camPos = Camera.CFrame.Position
+			local targetCFrame = CFrame.lookAt(camPos, predictedWorld)
+			local alpha = 1 - math.exp(-math.clamp(Settings.AimSmoothness, 0.05, 1) * 28 * math.min(dt or 0.016, 0.05))
+			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
+		end
+	else
+		TargetIndicator.Visible = false
 	end
 end)
 
