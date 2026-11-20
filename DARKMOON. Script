@@ -1,13 +1,11 @@
 --[[
 	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
 ]]
--- DARK MOON V 1.2 | By biyxznd | Discord: https://discord.gg/QxRKp9wNeE
+-- Adrin's Scripts V6.2
 
 -- Movement + Teleport + Troll + Misc + Settings
 
 -- RIGHT SHIFT = Open / Close Menu
-
--- G = Vehicle Fly
 
 
 
@@ -41,7 +39,7 @@ local function Main()
 
             game:GetService("StarterGui"):SetCore("SendNotification", {
 
-                Title = "DARK MOON",
+                Title = "Adrin's Scripts",
 
                 Text = msg,
 
@@ -55,7 +53,7 @@ local function Main()
 
 
 
-    notify("Loading V 1.2 (by biyxznd)...")
+    notify("Loading V6.2...")
 
 
 
@@ -79,7 +77,7 @@ local function Main()
 
     pcall(function()
 
-        local old = parent:FindFirstChild("DarkMoon")
+        local old = parent:FindFirstChild("AdrinsScripts")
 
         if old then old:Destroy() end
 
@@ -175,7 +173,7 @@ local function Main()
 
     local gui = make("ScreenGui", {
 
-        Name="DarkMoon",
+        Name="AdrinsScripts",
 
         ResetOnSpawn=false,
 
@@ -630,7 +628,63 @@ local function Main()
     -- Some Roblox executor fonts do not include those glyphs and render them as squares.
     local tabIcons={Movement="M",Teleport="TP",Troll="TR",Misc="MX",Settings="S"}
 
+    local activePage="Movement"
+    local searchableRows={}
+
+    local function applySearchFilter()
+        local q=searchBox.Text:lower():match("^%s*(.-)%s*$")
+        if q=="" then
+            for _,entry in ipairs(searchableRows) do
+                entry.row.Visible=true
+            end
+            for n,p in pairs(pages) do
+                p.Visible=(n==activePage)
+            end
+            return
+        end
+
+        local pageMatches={}
+        for _,entry in ipairs(searchableRows) do
+            local matched=entry.text:find(q,1,true)~=nil
+            entry.row.Visible=matched
+            if matched and entry.pageName then
+                pageMatches[entry.pageName]=true
+            end
+        end
+
+        for n,p in pairs(pages) do
+            p.Visible=(pageMatches[n]==true)
+        end
+    end
+
+    local function registerSearchable(row,pageName,extraTexts)
+        local parts={}
+        for _,desc in ipairs(row:GetDescendants()) do
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                if desc.Text and desc.Text~="" then
+                    table.insert(parts,desc.Text)
+                end
+            end
+        end
+        for _,t in ipairs(extraTexts or {}) do
+            if t and t~="" then
+                table.insert(parts,t)
+            end
+        end
+        table.insert(searchableRows,{
+            row=row,
+            pageName=pageName,
+            text=table.concat(parts," "):lower()
+        })
+    end
+
     local function showPage(name)
+        activePage=name
+        local q=searchBox.Text:lower():match("^%s*(.-)%s*$")
+        if q~="" then
+            searchBox.Text=""
+            return
+        end
 
         for n,p in pairs(pages) do p.Visible=(n==name) end
 
@@ -706,6 +760,8 @@ local function Main()
 
         },content)
 
+        pages[name]:SetAttribute("TabName",name)
+
         b.MouseButton1Click:Connect(function()
 
             showPage(name)
@@ -714,6 +770,16 @@ local function Main()
 
         return pages[name]
 
+    end
+
+    local function getPageName(container)
+        local cur=container
+        while cur and cur~=gui do
+            local tabName=cur:GetAttribute("TabName")
+            if tabName then return tabName end
+            cur=cur.Parent
+        end
+        return nil
     end
 
 
@@ -776,11 +842,7 @@ local function Main()
 
             PaddingLeft=UDim.new(0,8),
 
-            PaddingLeft=UDim.new(0,8),
-
             PaddingRight=UDim.new(0,8),
-
-            PaddingTop=UDim.new(0,8),
 
             PaddingBottom=UDim.new(0,8)
 
@@ -984,6 +1046,7 @@ local function Main()
         if key then binds[key]=obj end
 
         table.insert(allToggles,obj)
+        registerSearchable(row,getPageName(col),{title,desc})
 
         return obj
 
@@ -1166,6 +1229,7 @@ local function Main()
 
 
         setValue(default,true)
+        registerSearchable(row,getPageName(col),{title})
 
     end
 
@@ -1198,6 +1262,7 @@ local function Main()
         corner(b,9)
 
         b.MouseButton1Click:Connect(callback)
+        registerSearchable(b,getPageName(col),{text})
 
         return b
 
@@ -1221,7 +1286,7 @@ local function Main()
 
     local left=column(moveTab,0,0.5,"Speed & Jump")
 
-    local right=column(moveTab,0.5,0.5,"Fly & Float")
+    local right=column(moveTab,0.5,0.5,"Float & Noclip")
 
 
 
@@ -1233,15 +1298,11 @@ local function Main()
 
     local bhopOn,infJumpEnabled,noclipOn=false,false,false
 
-    local flying,flySpeed=false,60
-
     local floatOn,floatSpeed,floatY,floatPart=false,40,0,nil
 
-    local bv,bg,flyConn
 
 
-
-    local walkToggle=toggleRow(left,1,"Enable WalkSpeed",nil,Enum.KeyCode.B,function(v)
+    toggleRow(left,1,"Enable WalkSpeed",nil,Enum.KeyCode.B,function(v)
 
         walkEnabled=v
 
@@ -1287,7 +1348,7 @@ local function Main()
 
 
 
-    local infJumpToggle=toggleRow(left,5,"Infinite Jump","Jump in mid-air",Enum.KeyCode.J,function(v)
+    toggleRow(left,5,"Infinite Jump","Jump in mid-air",Enum.KeyCode.J,function(v)
 
         infJumpEnabled=v
 
@@ -1337,263 +1398,7 @@ local function Main()
 
 
 
-    local function stopFly()
-
-        flying=false
-
-        if flyConn then flyConn:Disconnect() flyConn=nil end
-
-        if bv then bv:Destroy() bv=nil end
-
-        if bg then bg:Destroy() bg=nil end
-
-        local _,_,hum=getChar()
-
-        if hum then hum.PlatformStand=false end
-
-    end
-
-
-
-    local function startFly()
-
-        local _,root,hum=getChar()
-
-        if not root or not hum or flying then return false end
-
-        flying=true
-
-        bv=make("BodyVelocity",{MaxForce=Vector3.new(1e6,1e6,1e6),P=15000,Velocity=Vector3.zero},root)
-
-        bg=make("BodyGyro",{MaxTorque=Vector3.new(1e6,1e6,1e6),P=12000},root)
-
-        hum.PlatformStand=true
-
-
-
-        flyConn=RunService.RenderStepped:Connect(function()
-
-            if not flying or not root.Parent then
-
-                stopFly()
-
-                return
-
-            end
-
-
-
-            local cam=workspace.CurrentCamera
-
-            bg.CFrame=cam.CFrame
-
-            local move=Vector3.zero
-
-
-
-            if UIS:IsKeyDown(Enum.KeyCode.W) then move=move+cam.CFrame.LookVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.S) then move=move-cam.CFrame.LookVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.D) then move=move+cam.CFrame.RightVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.A) then move=move-cam.CFrame.RightVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.Space) then move=move+Vector3.new(0,1,0) end
-
-            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move=move-Vector3.new(0,1,0) end
-
-
-
-            if move.Magnitude>0 then move=move.Unit*flySpeed end
-
-            bv.Velocity=move
-
-        end)
-
-        return true
-
-    end
-
-
-
-    local flyToggle=toggleRow(right,1,"Flight","WASD + Space / Ctrl",Enum.KeyCode.F,function(v)
-
-        if v then
-
-            if startFly() then
-
-                setStatus("FLIGHT ACTIVE")
-
-            else
-
-                setStatus("NO CHARACTER",C.bad)
-
-            end
-
-        else
-
-            stopFly()
-
-            setStatus("FLIGHT OFF",C.sub)
-
-        end
-
-    end)
-
-    sliderRow(right,2,"Fly Speed",1,500,60,"",function(v) flySpeed=v end)
-
-
-
-    -- Vehicle Fly*
-
-    local vehicleFlying=false
-
-    local vehicleSpeed=100
-
-    local vehicleVelocity,vehicleGyro,vehicleConnection
-
-    local vehicleFlyToggle
-
-
-
-    local function stopVehicleFly()
-
-        vehicleFlying=false
-
-        if vehicleConnection then vehicleConnection:Disconnect() vehicleConnection=nil end
-
-        if vehicleVelocity then vehicleVelocity:Destroy() vehicleVelocity=nil end
-
-        if vehicleGyro then vehicleGyro:Destroy() vehicleGyro=nil end
-
-    end
-
-
-
-    local function startVehicleFly()
-
-        local _,_,hum=getChar()
-
-        if not hum or not hum.SeatPart then return false end
-
-
-
-        local seat=hum.SeatPart
-
-        local root=seat.AssemblyRootPart or seat
-
-        if not root or not root:IsA("BasePart") then return false end
-
-
-
-        vehicleFlying=true
-
-        vehicleVelocity=make("BodyVelocity",{
-
-            MaxForce=Vector3.new(1e8,1e8,1e8),
-
-            P=25000,
-
-            Velocity=Vector3.zero
-
-        },root)
-
-
-
-        vehicleGyro=make("BodyGyro",{
-
-            MaxTorque=Vector3.new(1e8,1e8,1e8),
-
-            P=25000,
-
-            D=1000,
-
-            CFrame=root.CFrame
-
-        },root)
-
-
-
-        vehicleConnection=RunService.RenderStepped:Connect(function()
-
-            if not vehicleFlying or not hum.Parent or hum.SeatPart~=seat or not root.Parent then
-
-                stopVehicleFly()
-
-                if vehicleFlyToggle then vehicleFlyToggle.Set(false,true) end
-
-                return
-
-            end
-
-
-
-            local cam=workspace.CurrentCamera
-
-            local direction=Vector3.zero
-
-            if UIS:IsKeyDown(Enum.KeyCode.W) then direction=direction+cam.CFrame.LookVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.S) then direction=direction-cam.CFrame.LookVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.D) then direction=direction+cam.CFrame.RightVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.A) then direction=direction-cam.CFrame.RightVector end
-
-            if UIS:IsKeyDown(Enum.KeyCode.Space) then direction=direction+Vector3.new(0,1,0) end
-
-            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then direction=direction-Vector3.new(0,1,0) end
-
-            if direction.Magnitude>0 then direction=direction.Unit*vehicleSpeed end
-
-
-
-            vehicleVelocity.Velocity=direction
-
-            vehicleGyro.CFrame=cam.CFrame
-
-        end)
-
-
-
-        return true
-
-    end
-
-
-
-    vehicleFlyToggle=toggleRow(right,3,"Vehicle Fly","Sit in a vehicle | WASD + Space / Ctrl",Enum.KeyCode.G,function(v)
-
-        if v then
-
-            if startVehicleFly() then
-
-                setStatus("VEHICLE FLY ACTIVE")
-
-            else
-
-                vehicleFlyToggle.Set(false,true)
-
-                setStatus("SIT IN A VEHICLE FIRST",C.bad)
-
-            end
-
-        else
-
-            stopVehicleFly()
-
-            setStatus("VEHICLE FLY OFF",C.sub)
-
-        end
-
-    end)
-
-    sliderRow(right,4,"Vehicle Fly Speed",10,500,100,"",function(v) vehicleSpeed=v end)
-
-
-
-    local noclipToggle=toggleRow(right,5,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
+    toggleRow(right,1,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
 
         noclipOn=v
 
@@ -1605,7 +1410,7 @@ local function Main()
 
     local clickTpOn=false
 
-    local clickTpToggle=toggleRow(right,6,"Click Teleport","Hold Left Ctrl + click",Enum.KeyCode.T,function(v)
+    toggleRow(right,2,"Click Teleport","Hold Left Ctrl + click",Enum.KeyCode.T,function(v)
 
         clickTpOn=v
 
@@ -1615,7 +1420,7 @@ local function Main()
 
     local floatToggle
 
-    floatToggle=toggleRow(right,7,"Air Float Platform","Q / E to move platform",nil,function(v)
+    floatToggle=toggleRow(right,3,"Air Float Platform","Q / E to move platform",nil,function(v)
 
         local _,root=getChar()
 
@@ -1659,7 +1464,7 @@ local function Main()
 
     end)
 
-    sliderRow(right,8,"Float Q/E Speed",1,150,40,"",function(v) floatSpeed=v end)
+    sliderRow(right,4,"Float Q/E Speed",1,150,40,"",function(v) floatSpeed=v end)
 
 
 
@@ -1913,13 +1718,11 @@ local function Main()
 
     local lowGravOn,gravValue=false,50
 
-    local sitOn=false
-
     local origGravity=workspace.Gravity
 
     local orbitOn,orbitRadius,orbitSpeed,orbitAngle=false,10,5,0
 
-    local headSitOn,followOn,spectateOn=false,false,false
+    local followOn,spectateOn=false,false
 
     local followTimer=0
 
@@ -1946,20 +1749,6 @@ local function Main()
         gravValue=v
 
         if lowGravOn then workspace.Gravity=v end
-
-    end)
-
-    toggleRow(trollLeft,7,"Force Sit","Stay seated",nil,function(v)
-
-        sitOn=v
-
-        if not v then
-
-            local _,_,hum=getChar()
-
-            if hum then hum.Sit=false end
-
-        end
 
     end)
 
@@ -2015,8 +1804,6 @@ local function Main()
 
         orbitOn=v
 
-        if v then headSitOn=false end
-
     end)
 
     sliderRow(trollRight,3,"Orbit Radius",3,50,10," studs",function(v) orbitRadius=v end)
@@ -2025,31 +1812,9 @@ local function Main()
 
 
 
-    local headSitToggle
-
-    headSitToggle=toggleRow(trollRight,5,"Head Sit","Sit on selected player's head",nil,function(v)
-
-        if v and not needTarget(headSitToggle) then return end
-
-        headSitOn=v
-
-        if v then orbitToggle.Set(false) end
-
-        if not v then
-
-            local _,_,hum=getChar()
-
-            if hum then hum.Sit=false end
-
-        end
-
-    end)
-
-
-
     local followToggle
 
-    followToggle=toggleRow(trollRight,6,"Follow Player","Walk after selected player",nil,function(v)
+    followToggle=toggleRow(trollRight,5,"Follow Player","Walk after selected player",nil,function(v)
 
         if v and not needTarget(followToggle) then return end
 
@@ -2061,7 +1826,7 @@ local function Main()
 
     local spectateToggle
 
-    spectateToggle=toggleRow(trollRight,7,"Spectate Player","View through their camera",nil,function(v)
+    spectateToggle=toggleRow(trollRight,6,"Spectate Player","View through their camera",nil,function(v)
 
         if v and not needTarget(spectateToggle) then return end
 
@@ -2099,8 +1864,6 @@ local function Main()
 
         end
 
-        if sitOn then hum.Sit=true end
-
 
 
         local target=selectedPlayer and selectedPlayer.Character
@@ -2122,20 +1885,6 @@ local function Main()
             root.CFrame=CFrame.new(pos,center)
 
             root.AssemblyLinearVelocity=Vector3.zero
-
-        elseif headSitOn then
-
-            local head=target and target:FindFirstChild("Head")
-
-            if head then
-
-                hum.Sit=true
-
-                root.CFrame=head.CFrame*CFrame.new(0,1.6,0)
-
-                root.AssemblyLinearVelocity=Vector3.zero
-
-            end
 
         end
 
@@ -2582,6 +2331,7 @@ local function Main()
             end
 
         end)
+        registerSearchable(row,getPageName(settingsLeft),{key,"color","colour","theme"})
 
     end
 
@@ -2717,17 +2467,7 @@ local function Main()
 
 
 
-    buttonRow(settingsRight,4,"HIDE KEYBINDS PANEL",C.row,function()
-
-        local panel=gui:FindFirstChild("Keybinds")
-
-        if panel then panel.Visible=not panel.Visible end
-
-    end)
-
-
-
-    buttonRow(settingsRight,5,"UNLOAD SCRIPT",C.ACCENT,function()
+    buttonRow(settingsRight,4,"UNLOAD SCRIPT",C.ACCENT,function()
 
         for _,t in ipairs(allToggles) do
 
@@ -2739,10 +2479,6 @@ local function Main()
 
         end
 
-        stopFly()
-
-        stopVehicleFly()
-
         workspace.Gravity=origGravity
 
         clearHighlights()
@@ -2750,148 +2486,6 @@ local function Main()
         gui:Destroy()
 
     end)
-
-
-
-    -- ACTIVE KEYBINDS PANEL*
-
-    local panelEntries={
-
-        {"WalkSpeed","B",walkToggle},
-
-        {"JumpPower","N",nil},
-
-        {"Infinite Jump","J",infJumpToggle},
-
-        {"Flight","F",flyToggle},
-
-        {"Vehicle Fly","G",vehicleFlyToggle},
-
-        {"Noclip","V",noclipToggle},
-
-        {"Click Teleport","T",clickTpToggle}
-
-    }
-
-
-
-    local PANEL_H=44+(#panelEntries+1)*32+6
-
-    local panel=make("Frame",{
-
-        Name="Keybinds",
-
-        Size=UDim2.fromOffset(220,PANEL_H),
-
-        AnchorPoint=Vector2.new(1,0.5),
-
-        Position=UDim2.new(1,-16,0.5,0),
-
-        BackgroundColor3=C.bg,
-
-        BorderSizePixel=0
-
-    },gui)
-
-    corner(panel,12)
-
-    outline(panel)
-
-
-
-    make("TextLabel",{
-
-        Size=UDim2.new(1,-60,0,32),
-
-        Position=UDim2.fromOffset(14,2),
-
-        BackgroundTransparency=1,
-
-        Text="Active Keybinds",
-
-        Font=Enum.Font.GothamBold,
-
-        TextSize=12,
-
-        TextColor3=C.text,
-
-        TextXAlignment=Enum.TextXAlignment.Left
-
-    },panel)
-
-
-
-    local function keyRow(index,name,keyName,toggleObj)
-
-        local r=make("Frame",{
-
-            Size=UDim2.new(1,-16,0,28),
-
-            Position=UDim2.fromOffset(8,38+(index-1)*32),
-
-            BackgroundColor3=C.row,
-
-            BorderSizePixel=0
-
-        },panel)
-
-        corner(r,7)
-
-
-
-        make("TextLabel",{
-
-            Size=UDim2.new(1,-100,1,0),
-
-            Position=UDim2.fromOffset(10,0),
-
-            BackgroundTransparency=1,
-
-            Text=name,
-
-            Font=Enum.Font.Gotham,
-
-            TextSize=11,
-
-            TextColor3=C.text,
-
-            TextXAlignment=Enum.TextXAlignment.Left
-
-        },r)
-
-
-
-        make("TextLabel",{
-
-            Size=UDim2.fromOffset(28,18),
-
-            Position=UDim2.new(1,-36,0.5,-9),
-
-            BackgroundColor3=C.chip,
-
-            Text=keyName,
-
-            Font=Enum.Font.GothamBold,
-
-            TextSize=9,
-
-            TextColor3=C.sub,
-
-            BorderSizePixel=0
-
-        },r)
-
-    end
-
-
-
-    keyRow(1,"Toggle UI Key","RS",nil)
-
-    for i,e in ipairs(panelEntries) do
-
-        keyRow(i+1,e[1],e[2],e[3])
-
-    end
 
 
 
@@ -2921,8 +2515,6 @@ local function Main()
 
             window.Visible=true
 
-            panel.Visible=not minimized
-
             scale.Scale=baseScale*0.92
 
             TweenService:Create(scale,TweenInfo.new(0.2,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
@@ -2934,8 +2526,6 @@ local function Main()
         else
 
             tween(scale,0.15,{Scale=baseScale*0.92})
-
-            panel.Visible=false
 
             task.delay(0.15,function()
 
@@ -2958,8 +2548,6 @@ local function Main()
         sidebar.Visible=not v
 
         status.Visible=not v
-
-        panel.Visible=(not v) and isOpen
 
         tween(window,0.2,{
 
@@ -2987,6 +2575,10 @@ local function Main()
 
 
 
+    searchBox:GetPropertyChangedSignal("Text"):Connect(applySearchFilter)
+
+
+
     UIS.InputBegan:Connect(function(input,processed)
 
         if input.KeyCode==Enum.KeyCode.RightShift then
@@ -3008,14 +2600,6 @@ local function Main()
 
 
     player.CharacterAdded:Connect(function()
-
-        stopFly()
-
-        stopVehicleFly()
-
-        flyToggle.Set(false,true)
-
-        vehicleFlyToggle.Set(false,true)
 
         if floatOn then floatToggle.Set(false) end
 
@@ -3067,11 +2651,11 @@ local function Main()
 
     setStatus("READY | RIGHT SHIFT: MENU")
 
-    notify("V 1.2 Loaded! | by biyxznd | Discord: https://discord.gg/QxRKp9wNeE")
+    notify("V6.2 Loaded!")
 
-    print("DARK MOON V 1.2 LOADED | BY BIYXZND | DISCORD: https://discord.gg/QxRKp9wNeE")
+    print("ADRIN'S SCRIPTS V6.2 LOADED")
 
-    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP | F = FLY | G = VEHICLE FLY")
+    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP")
 
 end
 
@@ -3081,7 +2665,7 @@ local ok,err=pcall(Main)
 
 if not ok then
 
-    warn("[DARK MOON] Failed to load: "..tostring(err))
+    warn("[Adrin's Scripts] Failed to load: "..tostring(err))
 
     pcall(function()
 
@@ -3089,7 +2673,7 @@ if not ok then
 
         local gui=Instance.new("ScreenGui")
 
-        gui.Name="DarkMoonError"
+        gui.Name="AdrinsScriptsError"
 
         gui.ResetOnSpawn=false
 
@@ -3115,7 +2699,7 @@ if not ok then
 
         box.Font=Enum.Font.Gotham
 
-        box.Text="DARK MOON failed to load:\n\n"..tostring(err).."\n\nClick to close"
+        box.Text="Adrin's Scripts failed to load:\n\n"..tostring(err).."\n\nClick to close"
 
         box.Parent=gui
 
