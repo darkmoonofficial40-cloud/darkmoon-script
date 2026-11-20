@@ -1314,6 +1314,110 @@ local function Main()
 
     local mobileJumpBoostUntil=0
 
+    local savedJoints={}
+
+
+
+    local function findJoint(char, names)
+
+        for _,desc in ipairs(char:GetDescendants()) do
+
+            if desc:IsA("Motor6D") then
+
+                for _,n in ipairs(names) do
+
+                    if desc.Name==n or (desc.Part1 and desc.Part1.Name==n) then
+
+                        return desc
+
+                    end
+
+                end
+
+            end
+
+        end
+
+        return nil
+
+    end
+
+
+
+    local function capturePoseJoints(char)
+
+        savedJoints={}
+
+        if not char then return end
+
+        local specs={
+
+            waist={"Waist","RootJoint"},
+
+            neck={"Neck"},
+
+            rShoulder={"RightShoulder","Right Shoulder"},
+
+            lShoulder={"LeftShoulder","Left Shoulder"},
+
+            rHip={"RightHip","Right Hip"},
+
+            lHip={"LeftHip","Left Hip"},
+
+            rKnee={"RightKnee"},
+
+            lKnee={"LeftKnee"}
+
+        }
+
+        for key,names in pairs(specs) do
+
+            local j=findJoint(char,names)
+
+            if j then
+
+                savedJoints[key]={joint=j,c0=j.C0}
+
+            end
+
+        end
+
+    end
+
+
+
+    local function applyJointOffset(entry, offsetCFrame, alpha)
+
+        if not entry or not entry.joint or not entry.joint.Parent then return end
+
+        local goal=entry.c0*offsetCFrame
+
+        entry.joint.C0=entry.joint.C0:Lerp(goal,math.clamp(alpha,0,1))
+
+    end
+
+
+
+    local function restorePoseJoints()
+
+        for _,entry in pairs(savedJoints) do
+
+            if entry and entry.joint and entry.joint.Parent then
+
+                pcall(function()
+
+                    entry.joint.C0=entry.c0
+
+                end)
+
+            end
+
+        end
+
+        savedJoints={}
+
+    end
+
 
 
     local function clearWebVisual()
@@ -1343,6 +1447,8 @@ local function Main()
         if bg then pcall(function() bg:Destroy() end) bg=nil end
 
         clearWebVisual()
+
+        restorePoseJoints()
 
         local _,_,hum=getChar()
 
@@ -1438,17 +1544,153 @@ local function Main()
 
 
 
+    local function updateSpiderBodyPose(curRoot,lookDir,roll,pitch,swingArc,dt)
+
+        local blend=math.clamp((dt or 0.016)*12,0.1,1)
+
+        local reachRight=swingArc>=0
+
+
+
+        applyJointOffset(
+
+            savedJoints.waist,
+
+            CFrame.Angles(0.14+math.abs(pitch)*0.25,math.sin(swingPhase)*0.22,-roll*0.45),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.neck,
+
+            CFrame.Angles(-pitch*0.45-0.12,0,-roll*0.35),
+
+            blend
+
+        )
+
+
+
+        if reachRight then
+
+            local lift=0.55+math.max(0,swingArc)*0.45
+
+            applyJointOffset(
+
+                savedJoints.rShoulder,
+
+                CFrame.Angles(math.rad(125+lift*35),0,math.rad(-22)),
+
+                blend
+
+            )
+
+            applyJointOffset(
+
+                savedJoints.lShoulder,
+
+                CFrame.Angles(math.rad(-28-swingArc*18),0,math.rad(26)),
+
+                blend
+
+            )
+
+        else
+
+            local lift=0.55+math.max(0,-swingArc)*0.45
+
+            applyJointOffset(
+
+                savedJoints.lShoulder,
+
+                CFrame.Angles(math.rad(125+lift*35),0,math.rad(22)),
+
+                blend
+
+            )
+
+            applyJointOffset(
+
+                savedJoints.rShoulder,
+
+                CFrame.Angles(math.rad(-28+swingArc*18),0,math.rad(-26)),
+
+                blend
+
+            )
+
+        end
+
+
+
+        local legKick=math.sin(swingPhase)*0.32
+
+        applyJointOffset(
+
+            savedJoints.rHip,
+
+            CFrame.Angles(-0.38+legKick,0.08,-0.08),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.lHip,
+
+            CFrame.Angles(-0.22-legKick,-0.08,0.08),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.rKnee,
+
+            CFrame.Angles(-math.max(0,0.45+legKick*0.7),0,0),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.lKnee,
+
+            CFrame.Angles(-math.max(0,0.35-legKick*0.7),0,0),
+
+            blend
+
+        )
+
+
+
+        local baseCFrame=CFrame.lookAt(curRoot.Position,curRoot.Position+lookDir)
+
+        bg.CFrame=baseCFrame*CFrame.Angles(pitch,0,roll)
+
+    end
+
+
+
     local function startFly()
 
         stopFly()
 
-        local _,root,hum=getChar()
+        local char,root,hum=getChar()
 
         if not root or not hum then return false end
 
         flying=true
 
         swingPhase=0
+
+        capturePoseJoints(char)
 
         bv=make("BodyVelocity",{MaxForce=Vector3.new(1e6,1e6,1e6),P=18000,Velocity=Vector3.zero},root)
 
@@ -1546,9 +1788,11 @@ local function Main()
 
             local activeMove=moveDir.Magnitude>0.05 or math.abs(verticalInput)>0.05
 
-            swingPhase=swingPhase+(dt or 0.016)*(activeMove and 5.2 or 1.6)
+            swingPhase=swingPhase+(dt or 0.016)*(activeMove and 5.4 or 1.8)
 
-            local pendulumLift=math.sin(swingPhase)*(flySpeed*0.18)
+            local swingArc=math.sin(swingPhase)
+
+            local pendulumLift=swingArc*(flySpeed*0.18)
 
             local targetVel=moveDir*flySpeed+Vector3.new(0,verticalInput*(flySpeed*0.75)+pendulumLift,0)
 
@@ -1570,13 +1814,11 @@ local function Main()
 
             if lookDir.Magnitude<1e-4 then lookDir=Vector3.new(0,0,-1) else lookDir=lookDir.Unit end
 
-            local pitch=-math.clamp(bv.Velocity.Y/math.max(flySpeed,1),-0.45,0.55)-0.12
+            local pitch=-math.clamp(bv.Velocity.Y/math.max(flySpeed,1),-0.45,0.55)-0.16
 
-            local roll=-math.sin(swingPhase)*0.18
+            local roll=-swingArc*0.24
 
-            local baseCFrame=CFrame.lookAt(curRoot.Position,curRoot.Position+lookDir)
-
-            bg.CFrame=baseCFrame*CFrame.Angles(pitch,0,roll)
+            updateSpiderBodyPose(curRoot,lookDir,roll,pitch,swingArc,dt)
 
         end)
 
