@@ -3115,7 +3115,7 @@ if not ok then
 
         box.Font=Enum.Font.Gotham
 
-        box.Text="Adrin's Scripts failed to load:\n\n"..tostring(err).."\n\nClick to close"
+        box.Text="darkmoon's Scripts failed to load:\n\n"..tostring(err).."\n\nClick to close"
 
         box.Parent=gui
 
