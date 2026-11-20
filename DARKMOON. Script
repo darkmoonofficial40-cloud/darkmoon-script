@@ -1,0 +1,2020 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Camera = workspace.CurrentCamera
+
+local TOGGLE_KEY = Enum.KeyCode.RightShift
+local SPRINT_KEY = Enum.KeyCode.LeftShift
+local SPRINT_BONUS = 10
+
+local Settings = {
+	-- Combat / Aim
+	TargetLock = true,
+	SilentAim = true,
+	SilentAimMode = "Smart", -- "Smart" or "Strict"
+	AimPriority = "Murderer", -- "Murderer", "Sheriff", "Nearest"
+	AimPart = "Head", -- "Head" or "HumanoidRootPart"
+	IgnoreFOV = true,
+	WallCheck = false,
+	FOVRadius = 220,
+	Smoothness = 0.35,
+	Prediction = 0.08,
+
+	-- Visuals
+	RoleBoxESP = true,
+	RoleNameESP = true,
+	RoleTracerESP = false,
+	GunESP = true,
+	Fullbright = false,
+	ShowAimMarker = true,
+	ShowFOV = false,
+
+	-- Movement & Utility
+	SprintEnabled = true,
+	Noclip = false,
+	InfJump = false,
+	WalkSpeed = 16,
+	JumpPower = 50,
+	AutoPickupGun = false,
+	AutoCollect = false,
+	KillAllLoop = false,
+	FlingPower = 180,
+}
+
+local isAiming = false
+local isSprinting = false
+local isFlinging = false
+local isKillingAll = false
+local spectateIndex = 0
+local currentSilentTargetPos = nil
+local savedCollisionStates = {}
+local savedLighting = nil
+
+-- Exact Role Colors: Innocent = Green, Murderer = Red, Sheriff = Blue
+local RoleColors = {
+	Innocent = Color3.fromRGB(70, 255, 130),
+	Murderer = Color3.fromRGB(255, 65, 80),
+	Sheriff = Color3.fromRGB(70, 165, 255),
+}
+
+local Theme = {
+	VoidBg = Color3.fromRGB(11, 12, 20),
+	SidebarBg = Color3.fromRGB(15, 16, 27),
+	CardBg = Color3.fromRGB(20, 22, 36),
+	CardHover = Color3.fromRGB(27, 30, 48),
+	MoonAccent = Color3.fromRGB(139, 124, 255),
+	MoonGlow = Color3.fromRGB(186, 176, 255),
+	TextBright = Color3.fromRGB(236, 235, 255),
+	TextMuted = Color3.fromRGB(145, 148, 180),
+	OffTrack = Color3.fromRGB(40, 43, 66),
+	OnTrack = Color3.fromRGB(125, 108, 255),
+	KnobColor = Color3.fromRGB(245, 245, 255),
+	BorderSoft = Color3.fromRGB(52, 55, 88),
+	GunColor = Color3.fromRGB(255, 210, 75),
+	AimMarkerColor = Color3.fromRGB(255, 75, 95),
+	FlingBtn = Color3.fromRGB(255, 85, 110),
+	TpBtn = Color3.fromRGB(110, 105, 245),
+}
+
+local existingGui = PlayerGui:FindFirstChild("DarkmoonUI")
+if existingGui then
+	existingGui:Destroy()
+end
+
+-- ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DarkmoonUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
+
+-- Custom DARKMOON emblem logo builder
+local function buildDarkmoonLogo(parent, showOptionsTag)
+	local LogoHolder = Instance.new("Frame")
+	LogoHolder.Name = "DarkmoonLogo"
+	LogoHolder.Size = UDim2.new(1, -46, 1, 0)
+	LogoHolder.Position = UDim2.new(0, 10, 0, 0)
+	LogoHolder.BackgroundTransparency = 1
+	LogoHolder.Parent = parent
+
+	local OuterRing = Instance.new("Frame")
+	OuterRing.Name = "EclipseRing"
+	OuterRing.Size = UDim2.new(0, 26, 0, 26)
+	OuterRing.Position = UDim2.new(0, 0, 0.5, -13)
+	OuterRing.BackgroundColor3 = Color3.fromRGB(22, 20, 42)
+	OuterRing.BorderSizePixel = 0
+	OuterRing.Parent = LogoHolder
+
+	local OuterCorner = Instance.new("UICorner")
+	OuterCorner.CornerRadius = UDim.new(1, 0)
+	OuterCorner.Parent = OuterRing
+
+	local OuterStroke = Instance.new("UIStroke")
+	OuterStroke.Color = Theme.MoonAccent
+	OuterStroke.Thickness = 1.6
+	OuterStroke.Parent = OuterRing
+
+	local MoonDisc = Instance.new("Frame")
+	MoonDisc.Name = "MoonDisc"
+	MoonDisc.Size = UDim2.new(0, 14, 0, 14)
+	MoonDisc.Position = UDim2.new(0.5, -6, 0.5, -7)
+	MoonDisc.BackgroundColor3 = Theme.MoonGlow
+	MoonDisc.BorderSizePixel = 0
+	MoonDisc.Parent = OuterRing
+
+	local DiscCorner = Instance.new("UICorner")
+	DiscCorner.CornerRadius = UDim.new(1, 0)
+	DiscCorner.Parent = MoonDisc
+
+	local ShadowCut = Instance.new("Frame")
+	ShadowCut.Name = "CrescentCutout"
+	ShadowCut.Size = UDim2.new(0, 12, 0, 12)
+	ShadowCut.Position = UDim2.new(0.5, -1, 0.5, -8)
+	ShadowCut.BackgroundColor3 = OuterRing.BackgroundColor3
+	ShadowCut.BorderSizePixel = 0
+	ShadowCut.Parent = OuterRing
+
+	local CutCorner = Instance.new("UICorner")
+	CutCorner.CornerRadius = UDim.new(1, 0)
+	CutCorner.Parent = ShadowCut
+
+	local Wordmark = Instance.new("TextLabel")
+	Wordmark.Name = "Wordmark"
+	Wordmark.Size = UDim2.new(0, 118, 1, 0)
+	Wordmark.Position = UDim2.new(0, 34, 0, 0)
+	Wordmark.BackgroundTransparency = 1
+	Wordmark.Text = "DARKMOON"
+	Wordmark.TextColor3 = Theme.TextBright
+	Wordmark.Font = Enum.Font.GothamBlack
+	Wordmark.TextSize = 14
+	Wordmark.TextXAlignment = Enum.TextXAlignment.Left
+	Wordmark.Parent = LogoHolder
+
+	local WordGrad = Instance.new("UIGradient")
+	WordGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Theme.TextBright),
+		ColorSequenceKeypoint.new(1, Theme.MoonGlow),
+	})
+	WordGrad.Parent = Wordmark
+
+	if showOptionsTag then
+		local Badge = Instance.new("TextLabel")
+		Badge.Name = "ModeBadge"
+		Badge.Size = UDim2.new(0, 56, 0, 18)
+		Badge.Position = UDim2.new(0, 142, 0.5, -9)
+		Badge.BackgroundColor3 = Theme.CardBg
+		Badge.Text = "HUB"
+		Badge.TextColor3 = Theme.MoonGlow
+		Badge.Font = Enum.Font.GothamBold
+		Badge.TextSize = 9
+		Badge.Parent = LogoHolder
+
+		local BadgeCorner = Instance.new("UICorner")
+		BadgeCorner.CornerRadius = UDim.new(1, 0)
+		BadgeCorner.Parent = Badge
+
+		local BadgeStroke = Instance.new("UIStroke")
+		BadgeStroke.Color = Theme.BorderSoft
+		BadgeStroke.Thickness = 1
+		BadgeStroke.Parent = Badge
+	end
+end
+
+-- FOV Circle Overlay
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Name = "FOVCircle"
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+FOVCircle.Size = UDim2.new(0, Settings.FOVRadius * 2, 0, Settings.FOVRadius * 2)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = Settings.ShowFOV
+FOVCircle.Parent = ScreenGui
+
+local FOVCorner = Instance.new("UICorner")
+FOVCorner.CornerRadius = UDim.new(1, 0)
+FOVCorner.Parent = FOVCircle
+
+local FOVStroke = Instance.new("UIStroke")
+FOVStroke.Color = Theme.MoonGlow
+FOVStroke.Thickness = 1.25
+FOVStroke.Transparency = 0.35
+FOVStroke.Parent = FOVCircle
+
+-- Aim Target Marker
+local AimMarker = Instance.new("Frame")
+AimMarker.Name = "AimMarker"
+AimMarker.Size = UDim2.new(0, 12, 0, 12)
+AimMarker.AnchorPoint = Vector2.new(0.5, 0.5)
+AimMarker.BackgroundColor3 = Theme.AimMarkerColor
+AimMarker.BorderSizePixel = 0
+AimMarker.Visible = false
+AimMarker.Parent = ScreenGui
+
+local MarkerCorner = Instance.new("UICorner")
+MarkerCorner.CornerRadius = UDim.new(1, 0)
+MarkerCorner.Parent = AimMarker
+
+-- Main Option Window
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 476, 0, 348)
+MainFrame.Position = UDim2.new(0.04, 0, 0.21, 0)
+MainFrame.BackgroundColor3 = Theme.VoidBg
+MainFrame.BorderSizePixel = 0
+MainFrame.Visible = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 14)
+MainCorner.Parent = MainFrame
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Theme.MoonAccent
+MainStroke.Thickness = 1.5
+MainStroke.Transparency = 0.2
+MainStroke.Parent = MainFrame
+
+-- Header with DARKMOON Logo
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 44)
+Header.BackgroundColor3 = Theme.SidebarBg
+Header.BorderSizePixel = 0
+Header.Parent = MainFrame
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 14)
+HeaderCorner.Parent = Header
+
+buildDarkmoonLogo(Header, true)
+
+local TopDivider = Instance.new("Frame")
+TopDivider.Size = UDim2.new(1, 0, 0, 1)
+TopDivider.Position = UDim2.new(0, 0, 0, 44)
+TopDivider.BackgroundColor3 = Theme.BorderSoft
+TopDivider.BorderSizePixel = 0
+TopDivider.Parent = MainFrame
+
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 28, 0, 26)
+MinimizeBtn.Position = UDim2.new(1, -36, 0.5, -13)
+MinimizeBtn.BackgroundColor3 = Theme.CardBg
+MinimizeBtn.Text = "—"
+MinimizeBtn.TextColor3 = Theme.MoonGlow
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.TextSize = 13
+MinimizeBtn.Parent = Header
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 7)
+MinCorner.Parent = MinimizeBtn
+
+-- Re-open Pill with DARKMOON Logo
+local ReopenBtn = Instance.new("TextButton")
+ReopenBtn.Name = "ReopenButton"
+ReopenBtn.Size = UDim2.new(0, 166, 0, 40)
+ReopenBtn.Position = UDim2.new(0.04, 0, 0.21, 0)
+ReopenBtn.BackgroundColor3 = Theme.VoidBg
+ReopenBtn.Text = ""
+ReopenBtn.AutoButtonColor = false
+ReopenBtn.Visible = false
+ReopenBtn.Parent = ScreenGui
+
+local ReopenCorner = Instance.new("UICorner")
+ReopenCorner.CornerRadius = UDim.new(0, 12)
+ReopenCorner.Parent = ReopenBtn
+
+local ReopenStroke = Instance.new("UIStroke")
+ReopenStroke.Color = Theme.MoonAccent
+ReopenStroke.Thickness = 1.5
+ReopenStroke.Parent = ReopenBtn
+
+buildDarkmoonLogo(ReopenBtn, false)
+
+local function applyMovementStats(character)
+	local hum = character and character:FindFirstChildOfClass("Humanoid")
+	if not hum then return end
+	local boost = (Settings.SprintEnabled and isSprinting) and SPRINT_BONUS or 0
+	hum.WalkSpeed = Settings.WalkSpeed + boost
+	hum.UseJumpPower = true
+	hum.JumpPower = Settings.JumpPower
+end
+
+local function applyFullbright(enabled)
+	if enabled then
+		if not savedLighting then
+			savedLighting = {
+				Brightness = Lighting.Brightness,
+				ClockTime = Lighting.ClockTime,
+				GlobalShadows = Lighting.GlobalShadows,
+				Ambient = Lighting.Ambient,
+				OutdoorAmbient = Lighting.OutdoorAmbient,
+			}
+		end
+		Lighting.Brightness = 2
+		Lighting.ClockTime = 14
+		Lighting.GlobalShadows = false
+		Lighting.Ambient = Color3.fromRGB(200, 200, 215)
+		Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 215)
+	elseif savedLighting then
+		Lighting.Brightness = savedLighting.Brightness
+		Lighting.ClockTime = savedLighting.ClockTime
+		Lighting.GlobalShadows = savedLighting.GlobalShadows
+		Lighting.Ambient = savedLighting.Ambient
+		Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
+	end
+end
+
+local function restoreNoclip(character)
+	for part, wasCollidable in pairs(savedCollisionStates) do
+		if part and part.Parent and part:IsA("BasePart") then
+			if not character or part:IsDescendantOf(character) then
+				part.CanCollide = wasCollidable
+			end
+		end
+	end
+	table.clear(savedCollisionStates)
+end
+
+local function applyNoclipStep(character)
+	if not Settings.Noclip then
+		restoreNoclip(character)
+		return
+	end
+	if not character then return end
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			if savedCollisionStates[part] == nil then
+				savedCollisionStates[part] = part.CanCollide
+			end
+			part.CanCollide = false
+		end
+	end
+end
+
+local function setPanelOpen(openState)
+	MainFrame.Visible = openState
+	ReopenBtn.Visible = not openState
+end
+
+MinimizeBtn.MouseButton1Click:Connect(function() setPanelOpen(false) end)
+ReopenBtn.MouseButton1Click:Connect(function() setPanelOpen(true) end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == TOGGLE_KEY then
+		setPanelOpen(not MainFrame.Visible)
+	elseif input.KeyCode == SPRINT_KEY then
+		isSprinting = true
+		applyMovementStats(LocalPlayer.Character)
+	elseif input.KeyCode == Enum.KeyCode.Space and Settings.InfJump then
+		local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if hum and hum.Health > 0 then
+			hum:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isAiming = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == SPRINT_KEY then
+		isSprinting = false
+		applyMovementStats(LocalPlayer.Character)
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isAiming = false
+	end
+end)
+
+-- Draggable Header
+local dragging, dragStart, startPos
+Header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainFrame.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
+
+-- Left Sidebar & Pages
+local Sidebar = Instance.new("Frame")
+Sidebar.Name = "Sidebar"
+Sidebar.Size = UDim2.new(0, 118, 1, -45)
+Sidebar.Position = UDim2.new(0, 0, 0, 45)
+Sidebar.BackgroundColor3 = Theme.SidebarBg
+Sidebar.BorderSizePixel = 0
+Sidebar.Parent = MainFrame
+
+local SideDivider = Instance.new("Frame")
+SideDivider.Size = UDim2.new(0, 1, 1, -45)
+SideDivider.Position = UDim2.new(0, 118, 0, 45)
+SideDivider.BackgroundColor3 = Theme.BorderSoft
+SideDivider.BorderSizePixel = 0
+SideDivider.Parent = MainFrame
+
+local SideLayout = Instance.new("UIListLayout")
+SideLayout.Padding = UDim.new(0, 6)
+SideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+SideLayout.Parent = Sidebar
+
+local SidePad = Instance.new("UIPadding")
+SidePad.PaddingTop = UDim.new(0, 10)
+SidePad.Parent = Sidebar
+
+local ContentHolder = Instance.new("Frame")
+ContentHolder.Name = "ContentHolder"
+ContentHolder.Size = UDim2.new(1, -119, 1, -45)
+ContentHolder.Position = UDim2.new(0, 119, 0, 45)
+ContentHolder.BackgroundTransparency = 1
+ContentHolder.Parent = MainFrame
+
+local Pages = {}
+local TabButtons = {}
+local ToggleUpdaters = {}
+local tweenInfo = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function selectTab(tabName)
+	for name, page in pairs(Pages) do
+		page.Visible = (name == tabName)
+	end
+	for name, btnData in pairs(TabButtons) do
+		local active = (name == tabName)
+		TweenService:Create(btnData.Button, tweenInfo, {
+			BackgroundColor3 = active and Theme.CardBg or Theme.SidebarBg,
+			TextColor3 = active and Theme.TextBright or Theme.TextMuted,
+		}):Play()
+		btnData.Bar.Visible = active
+	end
+end
+
+local function createCategoryTab(tabName)
+	local TabBtn = Instance.new("TextButton")
+	TabBtn.Size = UDim2.new(0, 100, 0, 34)
+	TabBtn.BackgroundColor3 = Theme.SidebarBg
+	TabBtn.Text = tabName
+	TabBtn.TextColor3 = Theme.TextMuted
+	TabBtn.Font = Enum.Font.GothamSemibold
+	TabBtn.TextSize = 12
+	TabBtn.AutoButtonColor = false
+	TabBtn.Parent = Sidebar
+
+	local BtnCorner = Instance.new("UICorner")
+	BtnCorner.CornerRadius = UDim.new(0, 8)
+	BtnCorner.Parent = TabBtn
+
+	local ActiveBar = Instance.new("Frame")
+	ActiveBar.Size = UDim2.new(0, 3, 0, 18)
+	ActiveBar.Position = UDim2.new(0, 2, 0.5, -9)
+	ActiveBar.BackgroundColor3 = Theme.MoonAccent
+	ActiveBar.BorderSizePixel = 0
+	ActiveBar.Visible = false
+	ActiveBar.Parent = TabBtn
+
+	local BarCorner = Instance.new("UICorner")
+	BarCorner.CornerRadius = UDim.new(1, 0)
+	BarCorner.Parent = ActiveBar
+
+	local Page = Instance.new("ScrollingFrame")
+	Page.Name = tabName .. "Page"
+	Page.Size = UDim2.new(1, 0, 1, 0)
+	Page.BackgroundTransparency = 1
+	Page.BorderSizePixel = 0
+	Page.ScrollBarThickness = 3
+	Page.ScrollBarImageColor3 = Theme.MoonAccent
+	Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+	Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	Page.Visible = false
+	Page.Parent = ContentHolder
+
+	local PageLayout = Instance.new("UIListLayout")
+	PageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	PageLayout.Padding = UDim.new(0, 8)
+	PageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	PageLayout.Parent = Page
+
+	local PagePad = Instance.new("UIPadding")
+	PagePad.PaddingTop = UDim.new(0, 10)
+	PagePad.PaddingBottom = UDim.new(0, 10)
+	PagePad.Parent = Page
+
+	Pages[tabName] = Page
+	TabButtons[tabName] = { Button = TabBtn, Bar = ActiveBar }
+
+	TabBtn.MouseButton1Click:Connect(function() selectTab(tabName) end)
+	return Page
+end
+
+local function addToggleOption(page, titleText, subtitleText, settingKey, onChanged)
+	local Row = Instance.new("TextButton")
+	Row.Size = UDim2.new(1, -18, 0, 48)
+	Row.BackgroundColor3 = Theme.CardBg
+	Row.Text = ""
+	Row.AutoButtonColor = false
+	Row.Parent = page
+
+	local RowCorner = Instance.new("UICorner")
+	RowCorner.CornerRadius = UDim.new(0, 9)
+	RowCorner.Parent = Row
+
+	local RowStroke = Instance.new("UIStroke")
+	RowStroke.Color = Theme.BorderSoft
+	RowStroke.Thickness = 1
+	RowStroke.Transparency = 0.5
+	RowStroke.Parent = Row
+
+	local Title = Instance.new("TextLabel")
+	Title.Size = UDim2.new(1, -68, 0, 20)
+	Title.Position = UDim2.new(0, 12, 0, 6)
+	Title.BackgroundTransparency = 1
+	Title.Text = titleText
+	Title.TextColor3 = Theme.TextBright
+	Title.Font = Enum.Font.GothamSemibold
+	Title.TextSize = 12
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = Row
+
+	local Sub = Instance.new("TextLabel")
+	Sub.Size = UDim2.new(1, -68, 0, 16)
+	Sub.Position = UDim2.new(0, 12, 0, 25)
+	Sub.BackgroundTransparency = 1
+	Sub.Text = subtitleText
+	Sub.TextColor3 = Theme.TextMuted
+	Sub.Font = Enum.Font.Gotham
+	Sub.TextSize = 10
+	Sub.TextXAlignment = Enum.TextXAlignment.Left
+	Sub.Parent = Row
+
+	local Track = Instance.new("Frame")
+	Track.Size = UDim2.new(0, 40, 0, 22)
+	Track.Position = UDim2.new(1, -50, 0.5, -11)
+	Track.BackgroundColor3 = Theme.OffTrack
+	Track.Parent = Row
+
+	local TrackCorner = Instance.new("UICorner")
+	TrackCorner.CornerRadius = UDim.new(1, 0)
+	TrackCorner.Parent = Track
+
+	local Knob = Instance.new("Frame")
+	Knob.Size = UDim2.new(0, 16, 0, 16)
+	Knob.Position = UDim2.new(0, 3, 0.5, -8)
+	Knob.BackgroundColor3 = Theme.KnobColor
+	Knob.Parent = Track
+
+	local KnobCorner = Instance.new("UICorner")
+	KnobCorner.CornerRadius = UDim.new(1, 0)
+	KnobCorner.Parent = Knob
+
+	local function updateState(instant)
+		local active = Settings[settingKey]
+		local trackCol = active and Theme.OnTrack or Theme.OffTrack
+		local knobPos = active and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+		local borderCol = active and Theme.MoonAccent or Theme.BorderSoft
+
+		if instant then
+			Track.BackgroundColor3 = trackCol
+			Knob.Position = knobPos
+			RowStroke.Color = borderCol
+		else
+			TweenService:Create(Track, tweenInfo, { BackgroundColor3 = trackCol }):Play()
+			TweenService:Create(Knob, tweenInfo, { Position = knobPos }):Play()
+			TweenService:Create(RowStroke, tweenInfo, { Color = borderCol }):Play()
+		end
+	end
+
+	ToggleUpdaters[settingKey] = updateState
+	updateState(true)
+
+	Row.MouseButton1Click:Connect(function()
+		Settings[settingKey] = not Settings[settingKey]
+		updateState(false)
+		if onChanged then onChanged(Settings[settingKey]) end
+	end)
+end
+
+local function setSettingState(settingKey, value)
+	if Settings[settingKey] == value then return end
+	Settings[settingKey] = value
+	if ToggleUpdaters[settingKey] then
+		ToggleUpdaters[settingKey](false)
+	end
+end
+
+local function addStepperOption(page, titleText, options, labels, settingKey)
+	local Row = Instance.new("Frame")
+	Row.Size = UDim2.new(1, -18, 0, 44)
+	Row.BackgroundColor3 = Theme.CardBg
+	Row.Parent = page
+
+	local RowCorner = Instance.new("UICorner")
+	RowCorner.CornerRadius = UDim.new(0, 9)
+	RowCorner.Parent = Row
+
+	local RowStroke = Instance.new("UIStroke")
+	RowStroke.Color = Theme.BorderSoft
+	RowStroke.Thickness = 1
+	RowStroke.Transparency = 0.5
+	RowStroke.Parent = Row
+
+	local Title = Instance.new("TextLabel")
+	Title.Size = UDim2.new(0.45, 0, 1, 0)
+	Title.Position = UDim2.new(0, 12, 0, 0)
+	Title.BackgroundTransparency = 1
+	Title.Text = titleText
+	Title.TextColor3 = Theme.TextBright
+	Title.Font = Enum.Font.GothamSemibold
+	Title.TextSize = 12
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = Row
+
+	local PrevBtn = Instance.new("TextButton")
+	PrevBtn.Size = UDim2.new(0, 24, 0, 24)
+	PrevBtn.Position = UDim2.new(1, -134, 0.5, -12)
+	PrevBtn.BackgroundColor3 = Theme.OffTrack
+	PrevBtn.Text = "<"
+	PrevBtn.TextColor3 = Theme.MoonGlow
+	PrevBtn.Font = Enum.Font.GothamBold
+	PrevBtn.TextSize = 12
+	PrevBtn.Parent = Row
+
+	local PrevCorner = Instance.new("UICorner")
+	PrevCorner.CornerRadius = UDim.new(0, 6)
+	PrevCorner.Parent = PrevBtn
+
+	local ValLabel = Instance.new("TextLabel")
+	ValLabel.Size = UDim2.new(0, 72, 0, 24)
+	ValLabel.Position = UDim2.new(1, -108, 0.5, -12)
+	ValLabel.BackgroundTransparency = 1
+	ValLabel.TextColor3 = Theme.MoonGlow
+	ValLabel.Font = Enum.Font.GothamBold
+	ValLabel.TextSize = 11
+	ValLabel.Parent = Row
+
+	local NextBtn = Instance.new("TextButton")
+	NextBtn.Size = UDim2.new(0, 24, 0, 24)
+	NextBtn.Position = UDim2.new(1, -34, 0.5, -12)
+	NextBtn.BackgroundColor3 = Theme.OffTrack
+	NextBtn.Text = ">"
+	NextBtn.TextColor3 = Theme.MoonGlow
+	NextBtn.Font = Enum.Font.GothamBold
+	NextBtn.TextSize = 12
+	NextBtn.Parent = Row
+
+	local NextCorner = Instance.new("UICorner")
+	NextCorner.CornerRadius = UDim.new(0, 6)
+	NextCorner.Parent = NextBtn
+
+	local idx = 1
+	for i, v in ipairs(options) do
+		if v == Settings[settingKey] then idx = i break end
+	end
+	ValLabel.Text = labels[idx]
+
+	local function step(dir)
+		idx = ((idx - 1 + dir) % #options) + 1
+		Settings[settingKey] = options[idx]
+		ValLabel.Text = labels[idx]
+	end
+
+	PrevBtn.MouseButton1Click:Connect(function() step(-1) end)
+	NextBtn.MouseButton1Click:Connect(function() step(1) end)
+end
+
+local function addSliderOption(page, titleText, minVal, maxVal, decimals, settingKey, onChanged)
+	local Row = Instance.new("Frame")
+	Row.Size = UDim2.new(1, -18, 0, 52)
+	Row.BackgroundColor3 = Theme.CardBg
+	Row.Parent = page
+
+	local RowCorner = Instance.new("UICorner")
+	RowCorner.CornerRadius = UDim.new(0, 9)
+	RowCorner.Parent = Row
+
+	local RowStroke = Instance.new("UIStroke")
+	RowStroke.Color = Theme.BorderSoft
+	RowStroke.Thickness = 1
+	RowStroke.Transparency = 0.5
+	RowStroke.Parent = Row
+
+	local Title = Instance.new("TextLabel")
+	Title.Size = UDim2.new(0.65, 0, 0, 20)
+	Title.Position = UDim2.new(0, 12, 0, 6)
+	Title.BackgroundTransparency = 1
+	Title.Text = titleText
+	Title.TextColor3 = Theme.TextBright
+	Title.Font = Enum.Font.GothamSemibold
+	Title.TextSize = 12
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = Row
+
+	local ValueText = Instance.new("TextLabel")
+	ValueText.Size = UDim2.new(0.3, -12, 0, 20)
+	ValueText.Position = UDim2.new(0.7, 0, 0, 6)
+	ValueText.BackgroundTransparency = 1
+	ValueText.TextColor3 = Theme.MoonGlow
+	ValueText.Font = Enum.Font.GothamBold
+	ValueText.TextSize = 11
+	ValueText.TextXAlignment = Enum.TextXAlignment.Right
+	ValueText.Parent = Row
+
+	local BarBg = Instance.new("TextButton")
+	BarBg.Size = UDim2.new(1, -24, 0, 8)
+	BarBg.Position = UDim2.new(0, 12, 0, 33)
+	BarBg.BackgroundColor3 = Theme.OffTrack
+	BarBg.Text = ""
+	BarBg.AutoButtonColor = false
+	BarBg.Parent = Row
+
+	local BarCorner = Instance.new("UICorner")
+	BarCorner.CornerRadius = UDim.new(1, 0)
+	BarCorner.Parent = BarBg
+
+	local Fill = Instance.new("Frame")
+	Fill.BackgroundColor3 = Theme.MoonAccent
+	Fill.BorderSizePixel = 0
+	Fill.Parent = BarBg
+
+	local FillCorner = Instance.new("UICorner")
+	FillCorner.CornerRadius = UDim.new(1, 0)
+	FillCorner.Parent = Fill
+
+	local function setFromAlpha(alpha)
+		alpha = math.clamp(alpha, 0, 1)
+		local raw = minVal + (maxVal - minVal) * alpha
+		local mult = 10 ^ decimals
+		local rounded = math.floor(raw * mult + 0.5) / mult
+		Settings[settingKey] = rounded
+		Fill.Size = UDim2.new(alpha, 0, 1, 0)
+		ValueText.Text = tostring(rounded)
+		if onChanged then onChanged(rounded) end
+	end
+
+	setFromAlpha((Settings[settingKey] - minVal) / (maxVal - minVal))
+
+	local sliding = false
+	local function updateFromInput(input)
+		local relX = input.Position.X - BarBg.AbsolutePosition.X
+		setFromAlpha(relX / BarBg.AbsoluteSize.X)
+	end
+
+	BarBg.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			sliding = true
+			updateFromInput(input)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			updateFromInput(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			sliding = false
+		end
+	end)
+end
+
+local function addActionOption(page, titleText, buttonText, onClick)
+	local Row = Instance.new("Frame")
+	Row.Size = UDim2.new(1, -18, 0, 44)
+	Row.BackgroundColor3 = Theme.CardBg
+	Row.Parent = page
+
+	local RowCorner = Instance.new("UICorner")
+	RowCorner.CornerRadius = UDim.new(0, 9)
+	RowCorner.Parent = Row
+
+	local RowStroke = Instance.new("UIStroke")
+	RowStroke.Color = Theme.BorderSoft
+	RowStroke.Thickness = 1
+	RowStroke.Transparency = 0.5
+	RowStroke.Parent = Row
+
+	local Title = Instance.new("TextLabel")
+	Title.Size = UDim2.new(0.55, 0, 1, 0)
+	Title.Position = UDim2.new(0, 12, 0, 0)
+	Title.BackgroundTransparency = 1
+	Title.Text = titleText
+	Title.TextColor3 = Theme.TextBright
+	Title.Font = Enum.Font.GothamSemibold
+	Title.TextSize = 12
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = Row
+
+	local Btn = Instance.new("TextButton")
+	Btn.Size = UDim2.new(0, 96, 0, 26)
+	Btn.Position = UDim2.new(1, -108, 0.5, -13)
+	Btn.BackgroundColor3 = Theme.OnTrack
+	Btn.Text = buttonText
+	Btn.TextColor3 = Theme.TextBright
+	Btn.Font = Enum.Font.GothamBold
+	Btn.TextSize = 11
+	Btn.Parent = Row
+
+	local BtnCorner = Instance.new("UICorner")
+	BtnCorner.CornerRadius = UDim.new(0, 6)
+	BtnCorner.Parent = Btn
+
+	Btn.MouseButton1Click:Connect(function()
+		if onClick then onClick() end
+	end)
+end
+
+local function addSpectateOption(page, onCycle)
+	local Row = Instance.new("Frame")
+	Row.Size = UDim2.new(1, -18, 0, 44)
+	Row.BackgroundColor3 = Theme.CardBg
+	Row.Parent = page
+
+	local RowCorner = Instance.new("UICorner")
+	RowCorner.CornerRadius = UDim.new(0, 9)
+	RowCorner.Parent = Row
+
+	local RowStroke = Instance.new("UIStroke")
+	RowStroke.Color = Theme.BorderSoft
+	RowStroke.Thickness = 1
+	RowStroke.Transparency = 0.5
+	RowStroke.Parent = Row
+
+	local Title = Instance.new("TextLabel")
+	Title.Size = UDim2.new(0.45, 0, 1, 0)
+	Title.Position = UDim2.new(0, 12, 0, 0)
+	Title.BackgroundTransparency = 1
+	Title.Text = "Spectate Player"
+	Title.TextColor3 = Theme.TextBright
+	Title.Font = Enum.Font.GothamSemibold
+	Title.TextSize = 12
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = Row
+
+	local PrevBtn = Instance.new("TextButton")
+	PrevBtn.Size = UDim2.new(0, 26, 0, 24)
+	PrevBtn.Position = UDim2.new(1, -138, 0.5, -12)
+	PrevBtn.BackgroundColor3 = Theme.OffTrack
+	PrevBtn.Text = "<"
+	PrevBtn.TextColor3 = Theme.MoonGlow
+	PrevBtn.Font = Enum.Font.GothamBold
+	PrevBtn.TextSize = 12
+	PrevBtn.Parent = Row
+
+	local PrevCorner = Instance.new("UICorner")
+	PrevCorner.CornerRadius = UDim.new(0, 6)
+	PrevCorner.Parent = PrevBtn
+
+	local TargetLabel = Instance.new("TextLabel")
+	TargetLabel.Size = UDim2.new(0, 74, 0, 24)
+	TargetLabel.Position = UDim2.new(1, -110, 0.5, -12)
+	TargetLabel.BackgroundTransparency = 1
+	TargetLabel.Text = "Self"
+	TargetLabel.TextColor3 = Theme.MoonGlow
+	TargetLabel.Font = Enum.Font.GothamBold
+	TargetLabel.TextSize = 10
+	TargetLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	TargetLabel.Parent = Row
+
+	local NextBtn = Instance.new("TextButton")
+	NextBtn.Size = UDim2.new(0, 26, 0, 24)
+	NextBtn.Position = UDim2.new(1, -34, 0.5, -12)
+	NextBtn.BackgroundColor3 = Theme.OffTrack
+	NextBtn.Text = ">"
+	NextBtn.TextColor3 = Theme.MoonGlow
+	NextBtn.Font = Enum.Font.GothamBold
+	NextBtn.TextSize = 12
+	NextBtn.Parent = Row
+
+	local NextCorner = Instance.new("UICorner")
+	NextCorner.CornerRadius = UDim.new(0, 6)
+	NextCorner.Parent = NextBtn
+
+	PrevBtn.MouseButton1Click:Connect(function() TargetLabel.Text = onCycle(-1) end)
+	NextBtn.MouseButton1Click:Connect(function() TargetLabel.Text = onCycle(1) end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	char:WaitForChild("Humanoid")
+	table.clear(savedCollisionStates)
+	isFlinging = false
+	isKillingAll = false
+	setSettingState("KillAllLoop", false)
+	applyMovementStats(char)
+	if spectateIndex == 0 then
+		Camera.CameraType = Enum.CameraType.Custom
+		Camera.CameraSubject = char:FindFirstChildOfClass("Humanoid")
+	end
+end)
+
+local function teleportToCFrame(targetCFrame)
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hrp or not hum or hum.Health <= 0 then return end
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	hrp.CFrame = targetCFrame
+end
+
+local function teleportToPlayer(targetPlayer)
+	if not targetPlayer or targetPlayer == LocalPlayer then return end
+	local tRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if tRoot then
+		teleportToCFrame(tRoot.CFrame * CFrame.new(0, 0, 3.5) + Vector3.new(0, 1, 0))
+	end
+end
+
+local function getSpectatableTargets()
+	local list = {}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer and plr.Character then
+			local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				table.insert(list, { Player = plr, Humanoid = hum })
+			end
+		end
+	end
+	return list
+end
+
+local function cycleSpectate(dir)
+	local targets = getSpectatableTargets()
+	if #targets == 0 then
+		spectateIndex = 0
+		local myHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		Camera.CameraType = Enum.CameraType.Custom
+		if myHum then Camera.CameraSubject = myHum end
+		return "Self"
+	end
+
+	spectateIndex = spectateIndex + dir
+	if spectateIndex > #targets then
+		spectateIndex = 0
+	elseif spectateIndex < 0 then
+		spectateIndex = #targets
+	end
+
+	if spectateIndex == 0 then
+		local myHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		Camera.CameraType = Enum.CameraType.Custom
+		if myHum then Camera.CameraSubject = myHum end
+		return "Self"
+	else
+		local entry = targets[spectateIndex]
+		Camera.CameraType = Enum.CameraType.Custom
+		Camera.CameraSubject = entry.Humanoid
+		return entry.Player.Name
+	end
+end
+
+-- Click-to-Fling Target Player
+local function flingPlayer(targetPlayer)
+	if isFlinging or not targetPlayer or targetPlayer == LocalPlayer then return end
+
+	local myChar = LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+	local targetChar = targetPlayer.Character
+	local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+	if not myRoot or not myHum or not targetRoot then return end
+
+	isFlinging = true
+	local origCFrame = myRoot.CFrame
+	local partsToRestore = {}
+
+	for _, part in ipairs(myChar:GetDescendants()) do
+		if part:IsA("BasePart") then
+			table.insert(partsToRestore, { Part = part, CanCollide = part.CanCollide })
+			part.CanCollide = false
+		end
+	end
+
+	myHum:ChangeState(Enum.HumanoidStateType.Physics)
+
+	local bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+	bv.Parent = myRoot
+
+	local bav = Instance.new("BodyAngularVelocity")
+	bav.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+	bav.AngularVelocity = Vector3.new(0, 65, 0)
+	bav.Parent = myRoot
+
+	local startClock = os.clock()
+	while (os.clock() - startClock) < 0.35 do
+		if not targetRoot.Parent or not myRoot.Parent then break end
+		local predicted = targetRoot.Position + (targetRoot.AssemblyLinearVelocity * 0.12)
+		myRoot.CFrame = CFrame.new(predicted)
+		local dir = (predicted - myRoot.Position)
+		local unit = dir.Magnitude > 0.05 and dir.Unit or Vector3.new(0, 0, -1)
+		bv.Velocity = (unit * Settings.FlingPower) + Vector3.new(0, Settings.FlingPower * 0.45, 0)
+		RunService.Heartbeat:Wait()
+	end
+
+	bv:Destroy()
+	bav:Destroy()
+
+	for _, entry in ipairs(partsToRestore) do
+		if entry.Part and entry.Part.Parent then
+			entry.Part.CanCollide = entry.CanCollide
+		end
+	end
+
+	if myRoot.Parent then
+		myRoot.AssemblyLinearVelocity = Vector3.zero
+		myRoot.AssemblyAngularVelocity = Vector3.zero
+		myRoot.CFrame = origCFrame + Vector3.new(0, 2, 0)
+	end
+	if myHum.Parent then
+		myHum:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end
+
+	isFlinging = false
+end
+
+-- Equip equipped/backpack weapon tool if available and cycle targets
+local function equipAttackTool()
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	if not char or not hum or not backpack then return nil end
+
+	for _, item in ipairs(char:GetChildren()) do
+		if item:IsA("Tool") then
+			return item
+		end
+	end
+	for _, item in ipairs(backpack:GetChildren()) do
+		if item:IsA("Tool") then
+			hum:EquipTool(item)
+			return item
+		end
+	end
+	return nil
+end
+
+local function hasAliveTargets()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer then
+			local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+			local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+			if hum and root and hum.Health > 0 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function killAllTargets(autoRepeat)
+	if isKillingAll then return end
+	local myChar = LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+	if not myRoot or not myHum or myHum.Health <= 0 then
+		if autoRepeat then
+			setSettingState("KillAllLoop", false)
+		end
+		return
+	end
+
+	isKillingAll = true
+	local origCFrame = myRoot.CFrame
+
+	repeat
+		local tool = equipAttackTool()
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr == LocalPlayer then continue end
+			if autoRepeat and not Settings.KillAllLoop then break end
+			if not myRoot.Parent or not myHum or myHum.Health <= 0 then break end
+
+			local tChar = plr.Character
+			local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+			local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+
+			if tRoot and tHum and tHum.Health > 0 then
+				local strikeStart = os.clock()
+				while (os.clock() - strikeStart) < 0.22 do
+					if autoRepeat and not Settings.KillAllLoop then break end
+					if not tRoot.Parent or not tHum or tHum.Health <= 0 or not myRoot.Parent then break end
+					myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 0, 2.5)
+					if tool and tool.Parent == myChar then
+						pcall(function()
+							tool:Activate()
+						end)
+					end
+					RunService.Heartbeat:Wait()
+				end
+			end
+		end
+
+		if autoRepeat and Settings.KillAllLoop and hasAliveTargets() then
+			RunService.Heartbeat:Wait()
+		else
+			break
+		end
+	until not autoRepeat or not Settings.KillAllLoop or not hasAliveTargets()
+
+	if autoRepeat and Settings.KillAllLoop then
+		setSettingState("KillAllLoop", false)
+	end
+
+	if myRoot and myRoot.Parent then
+		myRoot.AssemblyLinearVelocity = Vector3.zero
+		myRoot.CFrame = origCFrame + Vector3.new(0, 2, 0)
+	end
+	isKillingAll = false
+end
+
+-- In-Game Role Resolver
+local function normalizeRole(raw)
+	if typeof(raw) ~= "string" then return nil end
+	local r = string.lower(raw)
+	if r == "murder" or r == "murderer" then
+		return "Murderer"
+	elseif r == "sheriff" or r == "shiref" or r == "hero" then
+		return "Sheriff"
+	elseif r == "innocent" then
+		return "Innocent"
+	end
+	return nil
+end
+
+local function hasRoleTool(container, keyword)
+	if not container then return false end
+	for _, item in ipairs(container:GetChildren()) do
+		if item:IsA("Tool") and string.find(string.lower(item.Name), keyword, 1, true) then
+			return true
+		end
+	end
+	return false
+end
+
+local function getRole(player)
+	local char = player.Character
+	local backpack = player:FindFirstChildOfClass("Backpack")
+
+	for _, container in ipairs({ player, char }) do
+		if container then
+			for _, boolName in ipairs({ "IsMurderer", "Murderer", "isMurder" }) do
+				local b = container:FindFirstChild(boolName)
+				if b and b:IsA("BoolValue") and b.Value == true then
+					return "Murderer"
+				end
+			end
+			for _, boolName in ipairs({ "IsSheriff", "Sheriff", "isSheriff" }) do
+				local b = container:FindFirstChild(boolName)
+				if b and b:IsA("BoolValue") and b.Value == true then
+					return "Sheriff"
+				end
+			end
+
+			for _, valName in ipairs({ "Role", "PlayerRole", "TeamRole" }) do
+				local v = container:FindFirstChild(valName)
+				if v and v:IsA("StringValue") then
+					local mapped = normalizeRole(v.Value)
+					if mapped then return mapped end
+				end
+			end
+
+			for _, attrName in ipairs({ "Role", "PlayerRole", "TeamRole" }) do
+				local attr = container:GetAttribute(attrName)
+				if attr ~= nil then
+					local mapped = normalizeRole(attr)
+					if mapped then return mapped end
+				end
+			end
+			if container:GetAttribute("Murderer") == true or container:GetAttribute("IsMurderer") == true then
+				return "Murderer"
+			end
+			if container:GetAttribute("Sheriff") == true or container:GetAttribute("IsSheriff") == true then
+				return "Sheriff"
+			end
+		end
+	end
+
+	if hasRoleTool(char, "knife") or hasRoleTool(backpack, "knife") then
+		return "Murderer"
+	end
+	if hasRoleTool(char, "gun") or hasRoleTool(backpack, "gun")
+		or hasRoleTool(char, "revolver") or hasRoleTool(backpack, "revolver") then
+		return "Sheriff"
+	end
+
+	if player.Team then
+		local mapped = normalizeRole(player.Team.Name)
+		if mapped then return mapped end
+	end
+
+	return "Innocent"
+end
+
+local function findActiveRolePlayer(targetRole)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer and getRole(plr) == targetRole then
+			local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+			local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+			if hum and root and hum.Health > 0 then
+				return plr
+			end
+		end
+	end
+	return nil
+end
+
+local function findActiveMurderer()
+	return findActiveRolePlayer("Murderer")
+end
+
+local function isPlayerOwnedDescendant(inst)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character and inst:IsDescendantOf(plr.Character) then
+			return true
+		end
+		local backpack = plr:FindFirstChild("Backpack")
+		if backpack and inst:IsDescendantOf(backpack) then
+			return true
+		end
+	end
+	return false
+end
+
+local function isGunKeyword(nameStr)
+	local lower = string.lower(nameStr)
+	return string.find(lower, "gun", 1, true)
+		or string.find(lower, "revolver", 1, true)
+		or string.find(lower, "pistol", 1, true)
+		or string.find(lower, "droppedgun", 1, true)
+end
+
+local function getDroppedGunTarget()
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if isPlayerOwnedDescendant(obj) then continue end
+
+		if obj:IsA("Tool") and isGunKeyword(obj.Name) then
+			local part = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart", true)
+			if part then
+				return obj, part
+			end
+		elseif (obj:IsA("BasePart") or obj:IsA("Model")) and isGunKeyword(obj.Name) then
+			local part = obj:IsA("BasePart") and obj or (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true))
+			if part then
+				return obj, part
+			end
+		elseif obj:IsA("ProximityPrompt") and obj.Parent and isGunKeyword(obj.Parent.Name) then
+			local part = obj.Parent:IsA("BasePart") and obj.Parent or obj.Parent:FindFirstChildWhichIsA("BasePart", true)
+			if part then
+				return obj.Parent, part, obj
+			end
+		end
+	end
+
+	return nil, nil, nil
+end
+
+local function findNearestCollectiblePart(myPos)
+	local bestPart = nil
+	local bestDist = math.huge
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") and not isPlayerOwnedDescendant(obj) then
+			local lower = string.lower(obj.Name)
+			if string.find(lower, "coin", 1, true) or string.find(lower, "gem", 1, true) or string.find(lower, "orb", 1, true) then
+				local dist = (obj.Position - myPos).Magnitude
+				if dist < bestDist then
+					bestDist = dist
+					bestPart = obj
+				end
+			end
+		end
+	end
+	return bestPart
+end
+
+-- Build Tabs & Options
+local CombatPage = createCategoryTab("Combat")
+local VisualsPage = createCategoryTab("Visuals")
+local MovementPage = createCategoryTab("Movement")
+local UtilityPage = createCategoryTab("Utility")
+local PlayersPage = createCategoryTab("Players")
+
+addToggleOption(CombatPage, "Silent Aim", "Redirect shots to selected target", "SilentAim")
+addStepperOption(CombatPage, "Silent Aim Mode", { "Smart", "Strict" }, { "Smart", "Strict Murder" }, "SilentAimMode")
+addToggleOption(CombatPage, "Target Lock (RMB)", "Hold Right-Click to lock camera", "TargetLock")
+addStepperOption(CombatPage, "Aim Target", { "Murderer", "Sheriff", "Nearest" }, { "Murderer", "Sheriff", "Nearest" }, "AimPriority")
+addStepperOption(CombatPage, "Aim Part", { "Head", "HumanoidRootPart" }, { "Head", "Torso" }, "AimPart")
+addToggleOption(CombatPage, "Ignore FOV", "Target anywhere on screen", "IgnoreFOV")
+addToggleOption(CombatPage, "Wall Check", "Require clear line of sight", "WallCheck")
+addSliderOption(CombatPage, "Lock Smoothness", 0.05, 1.0, 2, "Smoothness")
+addSliderOption(CombatPage, "Velocity Lead", 0, 0.25, 2, "Prediction")
+
+addToggleOption(VisualsPage, "2D Role Box", "Innocent Green • Murder Red • Sheriff Blue", "RoleBoxESP")
+addToggleOption(VisualsPage, "Role Name & Dist", "Show role and distance tags", "RoleNameESP")
+addToggleOption(VisualsPage, "Role Tracers", "Draw lines to active players", "RoleTracerESP")
+addToggleOption(VisualsPage, "Dropped Gun ESP", "Highlight dropped gun through walls", "GunESP")
+addToggleOption(VisualsPage, "Fullbright", "Brighten dark areas and shadows", "Fullbright", function(enabled)
+	applyFullbright(enabled)
+end)
+addToggleOption(VisualsPage, "Aim Marker", "Show target dot on screen", "ShowAimMarker")
+addToggleOption(VisualsPage, "Show FOV Ring", "Display target lock radius circle", "ShowFOV", function(enabled)
+	FOVCircle.Visible = enabled
+end)
+addSliderOption(VisualsPage, "FOV Radius", 60, 320, 0, "FOVRadius", function(val)
+	FOVCircle.Size = UDim2.new(0, val * 2, 0, val * 2)
+end)
+
+addToggleOption(MovementPage, "Sprint (LeftShift)", "Hold LeftShift for speed boost", "SprintEnabled", function()
+	applyMovementStats(LocalPlayer.Character)
+end)
+addToggleOption(MovementPage, "Noclip", "Walk through walls and obstacles", "Noclip", function(enabled)
+	if not enabled then
+		restoreNoclip(LocalPlayer.Character)
+	end
+end)
+addToggleOption(MovementPage, "Infinite Jump", "Jump again mid-air with Space", "InfJump")
+addSliderOption(MovementPage, "Walk Speed", 16, 48, 0, "WalkSpeed", function()
+	applyMovementStats(LocalPlayer.Character)
+end)
+addSliderOption(MovementPage, "Jump Power", 50, 120, 0, "JumpPower", function()
+	applyMovementStats(LocalPlayer.Character)
+end)
+
+addToggleOption(UtilityPage, "Auto Pickup Gun", "Snap directly to dropped gun", "AutoPickupGun")
+addToggleOption(UtilityPage, "Auto Collect Coins", "Snap to nearby coins or gems", "AutoCollect")
+addToggleOption(UtilityPage, "Kill All Loop", "Repeat until all down or toggled off", "KillAllLoop", function(enabled)
+	if enabled and not isKillingAll then
+		task.spawn(function()
+			killAllTargets(true)
+		end)
+	end
+end)
+addActionOption(UtilityPage, "Kill All Once", "Attack All", function()
+	killAllTargets(false)
+end)
+addActionOption(UtilityPage, "TP to Murder", "Teleport", function()
+	teleportToPlayer(findActiveRolePlayer("Murderer"))
+end)
+addActionOption(UtilityPage, "TP to Sheriff", "Teleport", function()
+	teleportToPlayer(findActiveRolePlayer("Sheriff"))
+end)
+addSliderOption(UtilityPage, "Fling Power", 80, 360, 0, "FlingPower")
+addSpectateOption(UtilityPage, cycleSpectate)
+addActionOption(UtilityPage, "Reset Character", "Respawn", function()
+	spectateIndex = 0
+	local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if hum then hum.Health = 0 end
+end)
+
+-- Quick Fling Murderer Top Banner inside Players Tab
+local QuickMurderBanner = Instance.new("Frame")
+QuickMurderBanner.Name = "QuickMurderBanner"
+QuickMurderBanner.LayoutOrder = 0
+QuickMurderBanner.Size = UDim2.new(1, -18, 0, 44)
+QuickMurderBanner.BackgroundColor3 = Theme.CardBg
+QuickMurderBanner.ClipsDescendants = true
+QuickMurderBanner.Parent = PlayersPage
+
+local QuickCorner = Instance.new("UICorner")
+QuickCorner.CornerRadius = UDim.new(0, 9)
+QuickCorner.Parent = QuickMurderBanner
+
+local QuickStroke = Instance.new("UIStroke")
+QuickStroke.Color = RoleColors.Murderer
+QuickStroke.Thickness = 1.2
+QuickStroke.Transparency = 0.35
+QuickStroke.Parent = QuickMurderBanner
+
+local QuickStripe = Instance.new("Frame")
+QuickStripe.Size = UDim2.new(0, 4, 1, 0)
+QuickStripe.BackgroundColor3 = RoleColors.Murderer
+QuickStripe.BorderSizePixel = 0
+QuickStripe.Parent = QuickMurderBanner
+
+local QuickTitle = Instance.new("TextLabel")
+QuickTitle.Size = UDim2.new(1, -116, 0, 18)
+QuickTitle.Position = UDim2.new(0, 12, 0, 5)
+QuickTitle.BackgroundTransparency = 1
+QuickTitle.Text = "MURDER TARGET"
+QuickTitle.TextColor3 = RoleColors.Murderer
+QuickTitle.Font = Enum.Font.GothamBold
+QuickTitle.TextSize = 9
+QuickTitle.TextXAlignment = Enum.TextXAlignment.Left
+QuickTitle.Parent = QuickMurderBanner
+
+local QuickMurderName = Instance.new("TextLabel")
+QuickMurderName.Size = UDim2.new(1, -116, 0, 18)
+QuickMurderName.Position = UDim2.new(0, 12, 0, 21)
+QuickMurderName.BackgroundTransparency = 1
+QuickMurderName.Text = "None"
+QuickMurderName.TextColor3 = Theme.TextBright
+QuickMurderName.Font = Enum.Font.GothamBold
+QuickMurderName.TextSize = 11
+QuickMurderName.TextXAlignment = Enum.TextXAlignment.Left
+QuickMurderName.TextTruncate = Enum.TextTruncate.AtEnd
+QuickMurderName.Parent = QuickMurderBanner
+
+local QuickFlingBtn = Instance.new("TextButton")
+QuickFlingBtn.Name = "QuickFlingMurderBtn"
+QuickFlingBtn.Size = UDim2.new(0, 92, 0, 28)
+QuickFlingBtn.Position = UDim2.new(1, -102, 0.5, -14)
+QuickFlingBtn.BackgroundColor3 = RoleColors.Murderer
+QuickFlingBtn.Text = "FLING MURDER"
+QuickFlingBtn.TextColor3 = Theme.TextBright
+QuickFlingBtn.Font = Enum.Font.GothamBlack
+QuickFlingBtn.TextSize = 10
+QuickFlingBtn.Parent = QuickMurderBanner
+
+local QuickBtnCorner = Instance.new("UICorner")
+QuickBtnCorner.CornerRadius = UDim.new(0, 7)
+QuickBtnCorner.Parent = QuickFlingBtn
+
+QuickFlingBtn.MouseButton1Click:Connect(function()
+	local murderPlr = findActiveMurderer()
+	if not murderPlr or isFlinging then return end
+	QuickFlingBtn.Text = "..."
+	flingPlayer(murderPlr)
+	if QuickFlingBtn and QuickFlingBtn.Parent then
+		QuickFlingBtn.Text = "FLING MURDER"
+	end
+end)
+
+-- Live Player Role List with Banner, TP & Click-to-Fling inside Players Tab
+local PlayerListCards = {}
+local nextCardOrder = 1
+
+local function createPlayerListCard(player)
+	if PlayerListCards[player] then return PlayerListCards[player] end
+
+	local Card = Instance.new("Frame")
+	Card.Name = "PlayerCard_" .. player.Name
+	Card.LayoutOrder = nextCardOrder
+	nextCardOrder += 1
+	Card.Size = UDim2.new(1, -18, 0, 52)
+	Card.BackgroundColor3 = Theme.CardBg
+	Card.ClipsDescendants = true
+	Card.Parent = PlayersPage
+
+	local CardCorner = Instance.new("UICorner")
+	CardCorner.CornerRadius = UDim.new(0, 9)
+	CardCorner.Parent = Card
+
+	local CardStroke = Instance.new("UIStroke")
+	CardStroke.Color = Theme.BorderSoft
+	CardStroke.Thickness = 1
+	CardStroke.Transparency = 0.45
+	CardStroke.Parent = Card
+
+	local BannerBar = Instance.new("Frame")
+	BannerBar.Name = "RoleBanner"
+	BannerBar.Size = UDim2.new(1, 0, 1, 0)
+	BannerBar.BackgroundColor3 = RoleColors.Innocent
+	BannerBar.BackgroundTransparency = 0.88
+	BannerBar.BorderSizePixel = 0
+	BannerBar.Parent = Card
+
+	local BannerGrad = Instance.new("UIGradient")
+	BannerGrad.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(0.6, 0.75),
+		NumberSequenceKeypoint.new(1, 0.95),
+	})
+	BannerGrad.Parent = BannerBar
+
+	local AccentStripe = Instance.new("Frame")
+	AccentStripe.Size = UDim2.new(0, 4, 1, 0)
+	AccentStripe.BackgroundColor3 = RoleColors.Innocent
+	AccentStripe.BorderSizePixel = 0
+	AccentStripe.Parent = Card
+
+	local AvatarImg = Instance.new("ImageLabel")
+	AvatarImg.Size = UDim2.new(0, 32, 0, 32)
+	AvatarImg.Position = UDim2.new(0, 12, 0.5, -16)
+	AvatarImg.BackgroundColor3 = Theme.VoidBg
+	AvatarImg.BorderSizePixel = 0
+	AvatarImg.Parent = Card
+
+	local AvCorner = Instance.new("UICorner")
+	AvCorner.CornerRadius = UDim.new(1, 0)
+	AvCorner.Parent = AvatarImg
+
+	local AvStroke = Instance.new("UIStroke")
+	AvStroke.Color = RoleColors.Innocent
+	AvStroke.Thickness = 1.5
+	AvStroke.Parent = AvatarImg
+
+	task.spawn(function()
+		local ok, content = pcall(function()
+			return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		end)
+		if ok and content and AvatarImg.Parent then
+			AvatarImg.Image = content
+		end
+	end)
+
+	local hasActionBtns = (player ~= LocalPlayer)
+	local infoWidthScale = hasActionBtns and 0.34 or 0.58
+
+	local NameLbl = Instance.new("TextLabel")
+	NameLbl.Size = UDim2.new(infoWidthScale, -48, 0, 20)
+	NameLbl.Position = UDim2.new(0, 52, 0, 6)
+	NameLbl.BackgroundTransparency = 1
+	NameLbl.Text = player.Name .. (player == LocalPlayer and " (You)" or "")
+	NameLbl.TextColor3 = Theme.TextBright
+	NameLbl.Font = Enum.Font.GothamBold
+	NameLbl.TextSize = 11
+	NameLbl.TextXAlignment = Enum.TextXAlignment.Left
+	NameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	NameLbl.Parent = Card
+
+	local RoleBadge = Instance.new("TextLabel")
+	RoleBadge.Size = UDim2.new(infoWidthScale, -48, 0, 16)
+	RoleBadge.Position = UDim2.new(0, 52, 0, 25)
+	RoleBadge.BackgroundTransparency = 1
+	RoleBadge.Text = "Innocent"
+	RoleBadge.TextColor3 = RoleColors.Innocent
+	RoleBadge.Font = Enum.Font.GothamBold
+	RoleBadge.TextSize = 10
+	RoleBadge.TextXAlignment = Enum.TextXAlignment.Left
+	RoleBadge.Parent = Card
+
+	local TpBtn = nil
+	local FlingBtn = nil
+	if hasActionBtns then
+		TpBtn = Instance.new("TextButton")
+		TpBtn.Name = "TpBtn"
+		TpBtn.Size = UDim2.new(0, 38, 0, 28)
+		TpBtn.Position = UDim2.new(1, -114, 0.5, -14)
+		TpBtn.BackgroundColor3 = Theme.TpBtn
+		TpBtn.Text = "TP"
+		TpBtn.TextColor3 = Theme.TextBright
+		TpBtn.Font = Enum.Font.GothamBlack
+		TpBtn.TextSize = 10
+		TpBtn.Parent = Card
+
+		local TpCorner = Instance.new("UICorner")
+		TpCorner.CornerRadius = UDim.new(0, 7)
+		TpCorner.Parent = TpBtn
+
+		TpBtn.MouseButton1Click:Connect(function()
+			teleportToPlayer(player)
+		end)
+
+		FlingBtn = Instance.new("TextButton")
+		FlingBtn.Name = "FlingBtn"
+		FlingBtn.Size = UDim2.new(0, 62, 0, 28)
+		FlingBtn.Position = UDim2.new(1, -70, 0.5, -14)
+		FlingBtn.BackgroundColor3 = Theme.FlingBtn
+		FlingBtn.Text = "FLING"
+		FlingBtn.TextColor3 = Theme.TextBright
+		FlingBtn.Font = Enum.Font.GothamBlack
+		FlingBtn.TextSize = 10
+		FlingBtn.Parent = Card
+
+		local FlingCorner = Instance.new("UICorner")
+		FlingCorner.CornerRadius = UDim.new(0, 7)
+		FlingCorner.Parent = FlingBtn
+
+		FlingBtn.MouseButton1Click:Connect(function()
+			if isFlinging then return end
+			FlingBtn.Text = "..."
+			flingPlayer(player)
+			if FlingBtn and FlingBtn.Parent then
+				FlingBtn.Text = "FLING"
+			end
+		end)
+	end
+
+	local entry = {
+		Card = Card,
+		Stroke = CardStroke,
+		BannerBar = BannerBar,
+		AccentStripe = AccentStripe,
+		AvStroke = AvStroke,
+		RoleBadge = RoleBadge,
+		TpBtn = TpBtn,
+		FlingBtn = FlingBtn,
+	}
+	PlayerListCards[player] = entry
+	return entry
+end
+
+local function removePlayerListCard(player)
+	local entry = PlayerListCards[player]
+	if entry then
+		entry.Card:Destroy()
+		PlayerListCards[player] = nil
+	end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+	createPlayerListCard(plr)
+end
+Players.PlayerAdded:Connect(createPlayerListCard)
+Players.PlayerRemoving:Connect(removePlayerListCard)
+
+selectTab("Combat")
+
+-- ESP Visuals Setup
+local ESPFolder = Instance.new("Folder")
+ESPFolder.Name = "DarkmoonESPVisuals"
+ESPFolder.Parent = ScreenGui
+
+local Visuals = {}
+
+local GunTagLabel = Instance.new("TextLabel")
+GunTagLabel.Name = "DroppedGunTag"
+GunTagLabel.Size = UDim2.new(0, 160, 0, 20)
+GunTagLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+GunTagLabel.BackgroundColor3 = Theme.VoidBg
+GunTagLabel.BackgroundTransparency = 0.25
+GunTagLabel.TextColor3 = Theme.GunColor
+GunTagLabel.Font = Enum.Font.GothamBold
+GunTagLabel.TextSize = 11
+GunTagLabel.TextStrokeTransparency = 0.3
+GunTagLabel.Visible = false
+GunTagLabel.Parent = ScreenGui
+
+local GunTagCorner = Instance.new("UICorner")
+GunTagCorner.CornerRadius = UDim.new(0, 6)
+GunTagCorner.Parent = GunTagLabel
+
+local activeHighlight = nil
+local highlightedTarget = nil
+
+local function clearGunHighlight()
+	if activeHighlight then
+		activeHighlight:Destroy()
+		activeHighlight = nil
+	end
+	highlightedTarget = nil
+	GunTagLabel.Visible = false
+end
+
+local function updateGunESP(myRoot)
+	local droppedGun, adornee = getDroppedGunTarget()
+	if not Settings.GunESP or not droppedGun or not adornee then
+		clearGunHighlight()
+		return
+	end
+
+	if highlightedTarget ~= droppedGun or not activeHighlight then
+		clearGunHighlight()
+		local hl = Instance.new("Highlight")
+		hl.Name = "DarkmoonGunHighlight"
+		hl.Adornee = droppedGun
+		hl.FillColor = Theme.GunColor
+		hl.OutlineColor = Color3.fromRGB(255, 240, 160)
+		hl.FillTransparency = 0.45
+		hl.OutlineTransparency = 0
+		hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		hl.Parent = ScreenGui
+		activeHighlight = hl
+		highlightedTarget = droppedGun
+	end
+
+	local screenPos, onScreen = Camera:WorldToViewportPoint(adornee.Position)
+	if onScreen then
+		local distStr = myRoot and (" [" .. math.floor((adornee.Position - myRoot.Position).Magnitude) .. "m]") or ""
+		GunTagLabel.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y - 18)
+		GunTagLabel.Text = "★ DROPPED GUN" .. distStr
+		GunTagLabel.Visible = true
+	else
+		GunTagLabel.Visible = false
+	end
+end
+
+local function getVisuals(player)
+	if Visuals[player] then return Visuals[player] end
+
+	local Box = Instance.new("Frame")
+	Box.BackgroundTransparency = 1
+	Box.Visible = false
+	Box.Parent = ESPFolder
+
+	local Stroke = Instance.new("UIStroke")
+	Stroke.Thickness = 1.75
+	Stroke.Parent = Box
+
+	local Tag = Instance.new("TextLabel")
+	Tag.Size = UDim2.new(0, 200, 0, 18)
+	Tag.AnchorPoint = Vector2.new(0.5, 1)
+	Tag.BackgroundTransparency = 1
+	Tag.Font = Enum.Font.GothamBold
+	Tag.TextSize = 11
+	Tag.TextStrokeTransparency = 0.3
+	Tag.Visible = false
+	Tag.Parent = ESPFolder
+
+	local Tracer = Instance.new("Frame")
+	Tracer.AnchorPoint = Vector2.new(0.5, 0.5)
+	Tracer.BorderSizePixel = 0
+	Tracer.Visible = false
+	Tracer.Parent = ESPFolder
+
+	Visuals[player] = { Box = Box, Stroke = Stroke, Tag = Tag, Tracer = Tracer }
+	return Visuals[player]
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	if Visuals[player] then
+		Visuals[player].Box:Destroy()
+		Visuals[player].Tag:Destroy()
+		Visuals[player].Tracer:Destroy()
+		Visuals[player] = nil
+	end
+end)
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function hasLineOfSight(targetPart, targetCharacter)
+	if not Settings.WallCheck then return true end
+	rayParams.FilterDescendantsInstances = { LocalPlayer.Character, targetCharacter }
+	local origin = Camera.CFrame.Position
+	local direction = targetPart.Position - origin
+	return workspace:Raycast(origin, direction, rayParams) == nil
+end
+
+local function getAimPartForCharacter(char)
+	if not char then return nil end
+	return char:FindFirstChild(Settings.AimPart) or char:FindFirstChild("HumanoidRootPart")
+end
+
+local function computePredictedPosition(targetPart)
+	return targetPart.Position + (targetPart.AssemblyLinearVelocity * Settings.Prediction)
+end
+
+local function findCandidateTarget(requireRoleMatch, enforceScreenChecks)
+	local myChar = LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	if not myRoot then return nil end
+
+	local viewportCenter = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
+	local bestPart = nil
+	local bestScore = math.huge
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player == LocalPlayer then continue end
+
+		local role = getRole(player)
+		if requireRoleMatch then
+			if Settings.AimPriority == "Murderer" and role ~= "Murderer" then
+				continue
+			elseif Settings.AimPriority == "Sheriff" and role ~= "Sheriff" then
+				continue
+			end
+		end
+
+		local char = player.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local aimPart = getAimPartForCharacter(char)
+
+		if char and hum and hum.Health > 0 and aimPart then
+			local screenPos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
+			local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - viewportCenter).Magnitude
+			local passesScreen = true
+			if enforceScreenChecks then
+				passesScreen = onScreen and (Settings.IgnoreFOV or (screenDist <= Settings.FOVRadius))
+			end
+
+			if passesScreen and hasLineOfSight(aimPart, char) then
+				local metric = (Settings.AimPriority == "Nearest") and (aimPart.Position - myRoot.Position).Magnitude or screenDist
+				if metric < bestScore then
+					bestScore = metric
+					bestPart = aimPart
+				end
+			end
+		end
+	end
+
+	return bestPart
+end
+
+local function getBestAimTarget()
+	local matched = findCandidateTarget(true, true)
+	if matched then return matched end
+	if Settings.IgnoreFOV then
+		return findCandidateTarget(false, true)
+	end
+	return nil
+end
+
+local function getSilentAimTargetPart()
+	-- Prioritize active Murderer when AimPriority is Murderer (or when Strict Murder mode is active)
+	if Settings.AimPriority == "Murderer" or Settings.SilentAimMode == "Strict" then
+		local murderPlr = findActiveMurderer()
+		if murderPlr then
+			local mPart = getAimPartForCharacter(murderPlr.Character)
+			if mPart and hasLineOfSight(mPart, murderPlr.Character) then
+				return mPart
+			end
+		end
+		if Settings.SilentAimMode == "Strict" then
+			return nil
+		end
+	end
+
+	return findCandidateTarget(true, false) or findCandidateTarget(false, false)
+end
+
+_G.DarkmoonGetAimPoint = function(fallbackWorldPos)
+	if not Settings.SilentAim then
+		return fallbackWorldPos
+	end
+	local sPart = getSilentAimTargetPart()
+	if sPart then
+		return computePredictedPosition(sPart)
+	end
+	if currentSilentTargetPos then
+		return currentSilentTargetPos
+	end
+	return fallbackWorldPos
+end
+
+RunService.Stepped:Connect(function()
+	applyNoclipStep(LocalPlayer.Character)
+end)
+
+RunService.RenderStepped:Connect(function()
+	local myChar = LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	local bottomCenter = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.92)
+
+	updateGunESP(myRoot)
+
+	local activeMurder = findActiveMurderer()
+	if activeMurder then
+		local mRoot = activeMurder.Character and activeMurder.Character:FindFirstChild("HumanoidRootPart")
+		local mDist = (myRoot and mRoot) and (" [" .. math.floor((mRoot.Position - myRoot.Position).Magnitude) .. "m]") or ""
+		QuickMurderName.Text = activeMurder.Name .. mDist
+		QuickMurderName.TextColor3 = RoleColors.Murderer
+		QuickFlingBtn.Active = not isFlinging
+		QuickFlingBtn.BackgroundTransparency = isFlinging and 0.55 or 0
+	else
+		QuickMurderName.Text = "None"
+		QuickMurderName.TextColor3 = Theme.TextMuted
+		QuickFlingBtn.Active = false
+		QuickFlingBtn.BackgroundTransparency = 0.55
+	end
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		local role = getRole(player)
+		local color = RoleColors[role] or RoleColors.Innocent
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local isAlive = (hum ~= nil and hum.Health > 0 and hrp ~= nil)
+
+		local cardEntry = PlayerListCards[player]
+		if cardEntry then
+			cardEntry.BannerBar.BackgroundColor3 = color
+			cardEntry.AccentStripe.BackgroundColor3 = color
+			cardEntry.AvStroke.Color = color
+			cardEntry.Stroke.Color = (role == "Murderer") and color or Theme.BorderSoft
+			cardEntry.RoleBadge.TextColor3 = color
+			if not isAlive then
+				cardEntry.RoleBadge.Text = role .. " • DEAD"
+			elseif player == LocalPlayer or not myRoot then
+				cardEntry.RoleBadge.Text = role
+			else
+				local dist = math.floor((hrp.Position - myRoot.Position).Magnitude)
+				cardEntry.RoleBadge.Text = role .. " [" .. dist .. "m]"
+			end
+			if cardEntry.TpBtn then
+				cardEntry.TpBtn.Active = isAlive and not isFlinging
+				cardEntry.TpBtn.BackgroundTransparency = (isAlive and not isFlinging) and 0 or 0.55
+			end
+			if cardEntry.FlingBtn then
+				cardEntry.FlingBtn.Active = isAlive and not isFlinging
+				cardEntry.FlingBtn.BackgroundTransparency = (isAlive and not isFlinging) and 0 or 0.55
+			end
+		end
+
+		if player == LocalPlayer then continue end
+
+		local v = getVisuals(player)
+		if isAlive then
+			local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+			if onScreen then
+				local top = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2.5, 0))
+				local bottom = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+				local h = math.max(12, math.abs(bottom.Y - top.Y))
+				local w = h * 0.65
+				local left = pos.X - (w * 0.5)
+				local topY = pos.Y - (h * 0.5)
+
+				if Settings.RoleBoxESP then
+					v.Box.Size = UDim2.new(0, w, 0, h)
+					v.Box.Position = UDim2.new(0, left, 0, topY)
+					v.Stroke.Color = color
+					v.Box.Visible = true
+				else
+					v.Box.Visible = false
+				end
+
+				if Settings.RoleNameESP then
+					local dist = myRoot and (" [" .. math.floor((hrp.Position - myRoot.Position).Magnitude) .. "m]") or ""
+					v.Tag.Position = UDim2.new(0, pos.X, 0, topY - 3)
+					v.Tag.TextColor3 = color
+					v.Tag.Text = player.Name .. " • " .. role .. dist
+					v.Tag.Visible = true
+				else
+					v.Tag.Visible = false
+				end
+
+				if Settings.RoleTracerESP then
+					local targetPt = Vector2.new(pos.X, pos.Y)
+					local delta = targetPt - bottomCenter
+					local mid = (targetPt + bottomCenter) * 0.5
+					v.Tracer.Size = UDim2.new(0, delta.Magnitude, 0, 1.5)
+					v.Tracer.Position = UDim2.new(0, mid.X, 0, mid.Y)
+					v.Tracer.Rotation = math.deg(math.atan2(delta.Y, delta.X))
+					v.Tracer.BackgroundColor3 = color
+					v.Tracer.BackgroundTransparency = 0.25
+					v.Tracer.Visible = true
+				else
+					v.Tracer.Visible = false
+				end
+			else
+				v.Box.Visible = false
+				v.Tag.Visible = false
+				v.Tracer.Visible = false
+			end
+		else
+			v.Box.Visible = false
+			v.Tag.Visible = false
+			v.Tracer.Visible = false
+		end
+	end
+
+	local silentPart = Settings.SilentAim and getSilentAimTargetPart() or nil
+	currentSilentTargetPos = silentPart and computePredictedPosition(silentPart) or nil
+
+	local markerOrLockPart = silentPart or (Settings.TargetLock and getBestAimTarget()) or nil
+	if markerOrLockPart then
+		local predictedPos = computePredictedPosition(markerOrLockPart)
+		if Settings.ShowAimMarker then
+			local mPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
+			if onScreen then
+				AimMarker.Position = UDim2.new(0, mPos.X, 0, mPos.Y)
+				AimMarker.Visible = true
+			else
+				AimMarker.Visible = false
+			end
+		else
+			AimMarker.Visible = false
+		end
+
+		if Settings.TargetLock and isAiming then
+			local camPos = Camera.CFrame.Position
+			local desiredCFrame = CFrame.lookAt(camPos, predictedPos)
+			Camera.CFrame = Camera.CFrame:Lerp(desiredCFrame, Settings.Smoothness)
+		end
+	else
+		AimMarker.Visible = false
+	end
+end)
+
+task.spawn(function()
+	while task.wait(0.15) do
+		if isFlinging or isKillingAll then continue end
+
+		local char = LocalPlayer.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if not hrp or not hum or hum.Health <= 0 then continue end
+
+		if Settings.AutoPickupGun then
+			local _, gunPart, prompt = getDroppedGunTarget()
+			if gunPart then
+				teleportToCFrame(CFrame.new(gunPart.Position + Vector3.new(0, 1.2, 0)))
+				if prompt then
+					pcall(function()
+						prompt:InputHoldBegin()
+						task.wait(0.05)
+						prompt:InputHoldEnd()
+					end)
+				end
+			end
+		elseif Settings.AutoCollect then
+			local coinPart = findNearestCollectiblePart(hrp.Position)
+			if coinPart then
+				teleportToCFrame(CFrame.new(coinPart.Position + Vector3.new(0, 1.2, 0)))
+			end
+		end
+	end
+end)
