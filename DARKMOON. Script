@@ -149,7 +149,7 @@ local function Main()
 
     local function corner(obj, radius)
 
-        make("UICorner", {CornerRadius=UDim.new(0,radius)}, obj)
+        make("UICornner", {CornerRadius=UDim.new(0,radius)}, obj)
 
     end
 
@@ -1294,7 +1294,7 @@ local function Main()
 
     local left=column(moveTab,0,0.5,"Speed & Jump")
 
-    local right=column(moveTab,0.5,0.5,"Spider Fly & Noclip")
+    local right=column(moveTab,0.5,0.5,"Flight & Noclip")
 
 
 
@@ -1307,6 +1307,8 @@ local function Main()
     local bhopOn,infJumpEnabled,noclipOn=false,false,false
 
     local flying,flySpeed=false,75
+
+    local supermanFlying,supermanSpeed=false,110
 
     local bv,bg,flyConn,webAnchor,webBeam,rootAtt,anchorAtt
 
@@ -1434,9 +1436,11 @@ local function Main()
 
 
 
-    local function stopFly()
+    local function stopAllFlight()
 
         flying=false
+
+        supermanFlying=false
 
         swingPhase=0
 
@@ -1678,9 +1682,169 @@ local function Main()
 
 
 
-    local function startFly()
+    local function updateSupermanBodyPose(curRoot,lookDir,roll,pitch,hoverWave,dt)
 
-        stopFly()
+        local blend=math.clamp((dt or 0.016)*12,0.1,1)
+
+
+
+        applyJointOffset(
+
+            savedJoints.waist,
+
+            CFrame.Angles(0.08,0,-roll*0.35),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.neck,
+
+            CFrame.Angles(-0.42-pitch*0.35,0,-roll*0.3),
+
+            blend
+
+        )
+
+        -- Signature Superman arm pose: right fist forward, left arm trailing back/side
+
+        applyJointOffset(
+
+            savedJoints.rShoulder,
+
+            CFrame.Angles(math.rad(92),0,math.rad(-6)),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.lShoulder,
+
+            CFrame.Angles(math.rad(-32+hoverWave*6),0,math.rad(18)),
+
+            blend
+
+        )
+
+        -- Legs extended cleanly behind in streamlined flight
+
+        applyJointOffset(
+
+            savedJoints.rHip,
+
+            CFrame.Angles(-0.14+hoverWave*0.04,0.04,-0.04),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.lHip,
+
+            CFrame.Angles(-0.14-hoverWave*0.04,-0.04,0.04),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.rKnee,
+
+            CFrame.Angles(-0.08,0,0),
+
+            blend
+
+        )
+
+        applyJointOffset(
+
+            savedJoints.lKnee,
+
+            CFrame.Angles(-0.08,0,0),
+
+            blend
+
+        )
+
+
+
+        local baseCFrame=CFrame.lookAt(curRoot.Position,curRoot.Position+lookDir)
+
+        bg.CFrame=baseCFrame*CFrame.Angles(pitch,0,roll)
+
+    end
+
+
+
+    local function readFlightControls(cam,curHum)
+
+        local moveDir=Vector3.zero
+
+        local verticalInput=0
+
+
+
+        if not UIS:GetFocusedTextBox() and cam then
+
+            local forward=Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
+
+            if forward.Magnitude>1e-4 then forward=forward.Unit else forward=Vector3.new(0,0,-1) end
+
+            local rightVec=Vector3.new(cam.CFrame.RightVector.X,0,cam.CFrame.RightVector.Z)
+
+            if rightVec.Magnitude>1e-4 then rightVec=rightVec.Unit else rightVec=Vector3.new(1,0,0) end
+
+
+
+            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir=moveDir+forward end
+
+            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir=moveDir-forward end
+
+            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir=moveDir+rightVec end
+
+            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir=moveDir-rightVec end
+
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then verticalInput=verticalInput+1 end
+
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then verticalInput=verticalInput-1 end
+
+        end
+
+
+
+        local stickDir=curHum and curHum.MoveDirection or Vector3.zero
+
+        if stickDir.Magnitude>0.05 then
+
+            moveDir=moveDir+Vector3.new(stickDir.X,0,stickDir.Z)
+
+        end
+
+        if os.clock()<mobileJumpBoostUntil then
+
+            verticalInput=verticalInput+1
+
+        end
+
+
+
+        if moveDir.Magnitude>1 then moveDir=moveDir.Unit end
+
+        return moveDir,verticalInput
+
+    end
+
+
+
+    local function startSpiderFly()
+
+        stopAllFlight()
 
         local char,root,hum=getChar()
 
@@ -1706,7 +1870,7 @@ local function Main()
 
             if not flying or not curChar or not curRoot or not curRoot.Parent or not curHum then
 
-                stopFly()
+                stopAllFlight()
 
                 return
 
@@ -1714,7 +1878,7 @@ local function Main()
 
             if not bv or not bv.Parent or not bg or not bg.Parent then
 
-                stopFly()
+                stopAllFlight()
 
                 return
 
@@ -1728,63 +1892,7 @@ local function Main()
 
 
 
-            local moveDir=Vector3.zero
-
-            local verticalInput=0
-
-
-
-            if not UIS:GetFocusedTextBox() then
-
-                -- PC controls: WASD + Space / LeftControl
-
-                local forward=Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
-
-                if forward.Magnitude>1e-4 then forward=forward.Unit else forward=Vector3.new(0,0,-1) end
-
-                local rightVec=Vector3.new(cam.CFrame.RightVector.X,0,cam.CFrame.RightVector.Z)
-
-                if rightVec.Magnitude>1e-4 then rightVec=rightVec.Unit else rightVec=Vector3.new(1,0,0) end
-
-
-
-                if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir=moveDir+forward end
-
-                if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir=moveDir-forward end
-
-                if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir=moveDir+rightVec end
-
-                if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir=moveDir-rightVec end
-
-                if UIS:IsKeyDown(Enum.KeyCode.Space) then verticalInput=verticalInput+1 end
-
-                if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then verticalInput=verticalInput-1 end
-
-            end
-
-
-
-            -- Mobile / Touch controls: virtual thumbstick MoveDirection + Jump button boost
-
-            local stickDir=curHum.MoveDirection
-
-            if stickDir.Magnitude>0.05 then
-
-                moveDir=moveDir+Vector3.new(stickDir.X,0,stickDir.Z)
-
-            end
-
-            if os.clock()<mobileJumpBoostUntil then
-
-                verticalInput=verticalInput+1
-
-            end
-
-
-
-            if moveDir.Magnitude>1 then moveDir=moveDir.Unit end
-
-
+            local moveDir,verticalInput=readFlightControls(cam,curHum)
 
             local activeMove=moveDir.Magnitude>0.05 or math.abs(verticalInput)>0.05
 
@@ -1798,9 +1906,7 @@ local function Main()
 
 
 
-            local currentVel=bv.Velocity
-
-            bv.Velocity=currentVel:Lerp(targetVel,math.clamp((dt or 0.016)*9,0.08,1))
+            bv.Velocity=bv.Velocity:Lerp(targetVel,math.clamp((dt or 0.016)*9,0.08,1))
 
 
 
@@ -1819,6 +1925,92 @@ local function Main()
             local roll=-swingArc*0.24
 
             updateSpiderBodyPose(curRoot,lookDir,roll,pitch,swingArc,dt)
+
+        end)
+
+        return true
+
+    end
+
+
+
+    local function startSupermanFly()
+
+        stopAllFlight()
+
+        local char,root,hum=getChar()
+
+        if not root or not hum then return false end
+
+        supermanFlying=true
+
+        swingPhase=0
+
+        capturePoseJoints(char)
+
+        bv=make("BodyVelocity",{MaxForce=Vector3.new(1e6,1e6,1e6),P=20000,Velocity=Vector3.zero},root)
+
+        bg=make("BodyGyro",{MaxTorque=Vector3.new(1e6,1e6,1e6),P=15000,CFrame=root.CFrame},root)
+
+        hum.PlatformStand=true
+
+
+
+        flyConn=RunService.RenderStepped:Connect(function(dt)
+
+            local curChar,curRoot,curHum=getChar()
+
+            if not supermanFlying or not curChar or not curRoot or not curRoot.Parent or not curHum then
+
+                stopAllFlight()
+
+                return
+
+            end
+
+            if not bv or not bv.Parent or not bg or not bg.Parent then
+
+                stopAllFlight()
+
+                return
+
+            end
+
+
+
+            local cam=workspace.CurrentCamera
+
+            if not cam then return end
+
+
+
+            local moveDir,verticalInput=readFlightControls(cam,curHum)
+
+            local activeMove=moveDir.Magnitude>0.05 or math.abs(verticalInput)>0.05
+
+            swingPhase=swingPhase+(dt or 0.016)*(activeMove and 4.0 or 2.2)
+
+            local hoverWave=math.sin(swingPhase)
+
+            local hoverOffset=activeMove and 0 or (hoverWave*2.5)
+
+            local targetVel=moveDir*supermanSpeed+Vector3.new(0,verticalInput*(supermanSpeed*0.8)+hoverOffset,0)
+
+
+
+            bv.Velocity=bv.Velocity:Lerp(targetVel,math.clamp((dt or 0.016)*10,0.1,1))
+
+
+
+            local lookDir=moveDir.Magnitude>0.05 and moveDir or Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
+
+            if lookDir.Magnitude<1e-4 then lookDir=Vector3.new(0,0,-1) else lookDir=lookDir.Unit end
+
+            local pitch=activeMove and (-math.rad(72)-math.clamp(bv.Velocity.Y/math.max(supermanSpeed,1),-0.35,0.35)) or (-math.rad(28)+hoverWave*0.05)
+
+            local roll=-math.clamp(bv.Velocity:Cross(lookDir).Y/math.max(supermanSpeed,1),-0.35,0.35)
+
+            updateSupermanBodyPose(curRoot,lookDir,roll,pitch,hoverWave,dt)
 
         end)
 
@@ -1912,7 +2104,7 @@ local function Main()
 
     UIS.JumpRequest:Connect(function()
 
-        if flying then
+        if flying or supermanFlying then
 
             mobileJumpBoostUntil=os.clock()+0.35
 
@@ -1930,13 +2122,21 @@ local function Main()
 
 
 
-    local flyToggle
+    local flyToggle,supermanToggle
+
+
 
     flyToggle=toggleRow(right,1,"Spider Fly","PC WASD/Space/Ctrl + Mobile",Enum.KeyCode.F,function(v)
 
         if v then
 
-            if startFly() then
+            if supermanToggle and supermanToggle.state then
+
+                supermanToggle.Set(false,true)
+
+            end
+
+            if startSpiderFly() then
 
                 setStatus("SPIDER FLY ACTIVE")
 
@@ -1950,7 +2150,11 @@ local function Main()
 
         else
 
-            stopFly()
+            if not supermanFlying then
+
+                stopAllFlight()
+
+            end
 
             setStatus("SPIDER FLY OFF",C.sub)
 
@@ -1958,11 +2162,51 @@ local function Main()
 
     end)
 
-    sliderRow(right,2,"Fly Speed",1,500,75,"",function(v) flySpeed=v end)
+    sliderRow(right,2,"Spider Fly Speed",1,500,75,"",function(v) flySpeed=v end)
 
 
 
-    toggleRow(right,3,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
+    supermanToggle=toggleRow(right,3,"Superman Fly","PC WASD/Space/Ctrl + Mobile",Enum.KeyCode.G,function(v)
+
+        if v then
+
+            if flyToggle and flyToggle.state then
+
+                flyToggle.Set(false,true)
+
+            end
+
+            if startSupermanFly() then
+
+                setStatus("SUPERMAN FLY ACTIVE")
+
+            else
+
+                supermanToggle.Set(false,true)
+
+                setStatus("NO CHARACTER",C.bad)
+
+            end
+
+        else
+
+            if not flying then
+
+                stopAllFlight()
+
+            end
+
+            setStatus("SUPERMAN FLY OFF",C.sub)
+
+        end
+
+    end)
+
+    sliderRow(right,4,"Superman Speed",1,500,110,"",function(v) supermanSpeed=v end)
+
+
+
+    toggleRow(right,5,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
 
         noclipOn=v
 
@@ -3114,7 +3358,7 @@ local function Main()
 
         end
 
-        stopFly()
+        stopAllFlight()
 
         aimbotOn=false
 
@@ -3244,9 +3488,11 @@ local function Main()
 
     player.CharacterAdded:Connect(function()
 
-        stopFly()
+        stopAllFlight()
 
         if flyToggle then flyToggle.Set(false,true) end
+
+        if supermanToggle then supermanToggle.Set(false,true) end
 
         if hipOn then
 
@@ -3324,7 +3570,7 @@ local function Main()
 
     print("DISCORD: "..DISCORD_INVITE)
 
-    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP | F = SPIDER FLY")
+    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP | F = SPIDER FLY | G = SUPERMAN FLY")
 
 end
 
