@@ -149,7 +149,7 @@ local function Main()
 
     local function corner(obj, radius)
 
-        make("UICornner", {CornerRadius=UDim.new(0,radius)}, obj)
+        make("UICorner", {CornerRadius=UDim.new(0,radius)}, obj)
 
     end
 
@@ -1294,7 +1294,7 @@ local function Main()
 
     local left=column(moveTab,0,0.5,"Speed & Jump")
 
-    local right=column(moveTab,0.5,0.5,"Noclip & Fly")
+    local right=column(moveTab,0.5,0.5,"Fly & Noclip")
 
 
 
@@ -1306,209 +1306,103 @@ local function Main()
 
     local bhopOn,infJumpEnabled,noclipOn=false,false,false
 
-    local flyOn,flySpeed=false,50
+    local flying,flySpeed=false,60
 
-    local flyAtt,flyVel,flyGyro,flyLegacyVel,flyLegacyGyro
+    local bv,bg,flyConn
 
 
 
-    local function clearFlyObjects()
+    local function stopFly()
 
-        for _,obj in ipairs({flyAtt,flyVel,flyGyro,flyLegacyVel,flyLegacyGyro}) do
+        flying=false
 
-            if obj then pcall(function() obj:Destroy() end) end
+        if flyConn then flyConn:Disconnect() flyConn=nil end
 
-        end
+        if bv then pcall(function() bv:Destroy() end) bv=nil end
 
-        flyAtt,flyVel,flyGyro,flyLegacyVel,flyLegacyGyro=nil,nil,nil,nil,nil
+        if bg then pcall(function() bg:Destroy() end) bg=nil end
+
+        local _,_,hum=getChar()
+
+        if hum then hum.PlatformStand=false end
 
     end
 
 
 
-    local function setFlyState(enabled)
+    local function startFly()
 
-        flyOn=enabled
-
-        clearFlyObjects()
+        stopFly()
 
         local _,root,hum=getChar()
 
-        if enabled then
+        if not root or not hum then return false end
 
-            if not root or not hum then return end
+        flying=true
 
-            hum.PlatformStand=true
+        bv=make("BodyVelocity",{MaxForce=Vector3.new(1e6,1e6,1e6),P=15000,Velocity=Vector3.zero},root)
 
-            root.AssemblyLinearVelocity=Vector3.zero
+        bg=make("BodyGyro",{MaxTorque=Vector3.new(1e6,1e6,1e6),P=12000,CFrame=root.CFrame},root)
 
-            root.AssemblyAngularVelocity=Vector3.zero
+        hum.PlatformStand=true
 
-            local okModern=pcall(function()
 
-                local att=Instance.new("Attachment")
 
-                att.Name="DarkMoonFlyAttachment"
+        flyConn=RunService.RenderStepped:Connect(function()
 
-                att.Parent=root
+            local curChar,curRoot,curHum=getChar()
 
-                local lv=Instance.new("LinearVelocity")
+            if not flying or not curChar or not curRoot or not curRoot.Parent or not curHum then
 
-                lv.Name="DarkMoonFlyVelocity"
+                stopFly()
 
-                lv.Attachment0=att
-
-                lv.VelocityConstraintMode=Enum.VelocityConstraintMode.Vector
-
-                lv.MaxForce=math.huge
-
-                lv.VectorVelocity=Vector3.zero
-
-                lv.Parent=root
-
-                local ao=Instance.new("AlignOrientation")
-
-                ao.Name="DarkMoonFlyAlign"
-
-                ao.Attachment0=att
-
-                ao.Mode=Enum.OrientationAlignmentMode.OneAttachment
-
-                ao.Responsiveness=25
-
-                ao.MaxTorque=math.huge
-
-                ao.CFrame=root.CFrame
-
-                ao.Parent=root
-
-                flyAtt,flyVel,flyGyro=att,lv,ao
-
-            end)
-
-            if not okModern then
-
-                pcall(function()
-
-                    local bv=Instance.new("BodyVelocity")
-
-                    bv.Name="DarkMoonFlyLegacyVelocity"
-
-                    bv.MaxForce=Vector3.new(1e6,1e6,1e6)
-
-                    bv.Velocity=Vector3.zero
-
-                    bv.Parent=root
-
-                    local bg=Instance.new("BodyGyro")
-
-                    bg.Name="DarkMoonFlyLegacyGyro"
-
-                    bg.MaxTorque=Vector3.new(1e6,1e6,1e6)
-
-                    bg.P=1e4
-
-                    bg.CFrame=root.CFrame
-
-                    bg.Parent=root
-
-                    flyLegacyVel,flyLegacyGyro=bv,bg
-
-                end)
+                return
 
             end
 
-        else
+            if not bv or not bv.Parent or not bg or not bg.Parent then
 
-            if hum then
+                stopFly()
 
-                hum.PlatformStand=false
-
-                if hum:GetState()==Enum.HumanoidStateType.PlatformStanding then
-
-                    pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-
-                end
+                return
 
             end
 
-        end
-
-    end
 
 
+            local cam=workspace.CurrentCamera
 
-    local function updateFly(dt)
+            if cam then bg.CFrame=cam.CFrame end
 
-        if not flyOn then return end
-
-        local _,root,hum=getChar()
-
-        local cam=workspace.CurrentCamera
-
-        if not root or not hum or not cam then return end
+            local move=Vector3.zero
 
 
 
-        if not hum.PlatformStand then hum.PlatformStand=true end
+            if not UIS:GetFocusedTextBox() and cam then
 
-        if not (flyVel or flyLegacyVel) then setFlyState(true) end
+                if UIS:IsKeyDown(Enum.KeyCode.W) then move=move+cam.CFrame.LookVector end
 
+                if UIS:IsKeyDown(Enum.KeyCode.S) then move=move-cam.CFrame.LookVector end
 
+                if UIS:IsKeyDown(Enum.KeyCode.D) then move=move+cam.CFrame.RightVector end
 
-        local moveDir=Vector3.zero
+                if UIS:IsKeyDown(Enum.KeyCode.A) then move=move-cam.CFrame.RightVector end
 
-        if not UIS:GetFocusedTextBox() then
+                if UIS:IsKeyDown(Enum.KeyCode.Space) then move=move+Vector3.new(0,1,0) end
 
-            local forward=cam.CFrame.LookVector
+                if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move=move-Vector3.new(0,1,0) end
 
-            local rightVec=cam.CFrame.RightVector
-
-            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir=moveDir+forward end
-
-            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir=moveDir-forward end
-
-            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir=moveDir+rightVec end
-
-            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir=moveDir-rightVec end
-
-            if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir=moveDir+Vector3.new(0,1,0) end
-
-            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir=moveDir-Vector3.new(0,1,0) end
-
-        end
+            end
 
 
 
-        local desiredVel=moveDir.Magnitude>0 and (moveDir.Unit*flySpeed) or Vector3.zero
+            if move.Magnitude>0 then move=move.Unit*flySpeed end
 
-        local targetLook=CFrame.lookAt(root.Position,root.Position+cam.CFrame.LookVector)
+            bv.Velocity=move
 
+        end)
 
-
-        if flyVel and flyVel.Parent then
-
-            flyVel.VectorVelocity=desiredVel
-
-        end
-
-        if flyGyro and flyGyro.Parent then
-
-            flyGyro.CFrame=targetLook
-
-        end
-
-        if flyLegacyVel and flyLegacyVel.Parent then
-
-            flyLegacyVel.Velocity=desiredVel
-
-        end
-
-        if flyLegacyGyro and flyLegacyGyro.Parent then
-
-            flyLegacyGyro.CFrame=targetLook
-
-        end
+        return true
 
     end
 
@@ -1598,7 +1492,7 @@ local function Main()
 
     UIS.JumpRequest:Connect(function()
 
-        if infJumpEnabled and not flyOn then
+        if infJumpEnabled then
 
             local _,_,hum=getChar()
 
@@ -1610,7 +1504,39 @@ local function Main()
 
 
 
-    toggleRow(right,1,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
+    local flyToggle
+
+    flyToggle=toggleRow(right,1,"Flight","WASD + Space / Ctrl",Enum.KeyCode.F,function(v)
+
+        if v then
+
+            if startFly() then
+
+                setStatus("FLIGHT ACTIVE")
+
+            else
+
+                flyToggle.Set(false,true)
+
+                setStatus("NO CHARACTER",C.bad)
+
+            end
+
+        else
+
+            stopFly()
+
+            setStatus("FLIGHT OFF",C.sub)
+
+        end
+
+    end)
+
+    sliderRow(right,2,"Fly Speed",1,500,60,"",function(v) flySpeed=v end)
+
+
+
+    toggleRow(right,3,"Noclip","Walk through walls",Enum.KeyCode.V,function(v)
 
         noclipOn=v
 
@@ -1620,25 +1546,7 @@ local function Main()
 
 
 
-    toggleRow(right,2,"Fly","WASD, Space & Ctrl to fly",Enum.KeyCode.F,function(v)
-
-        setFlyState(v)
-
-        setStatus(v and "FLY ON" or "FLY OFF")
-
-    end)
-
-
-
-    sliderRow(right,3,"Fly Speed",10,250,50," studs",function(v)
-
-        flySpeed=v
-
-    end)
-
-
-
-    RunService.Heartbeat:Connect(function(dt)
+    RunService.Heartbeat:Connect(function()
 
         local _,_,hum=getChar()
 
@@ -1656,13 +1564,11 @@ local function Main()
 
         if hipOn then hum.HipHeight=hipValue end
 
-        if not flyOn and bhopOn and not UIS:GetFocusedTextBox() and UIS:IsKeyDown(Enum.KeyCode.Space) and hum.FloorMaterial~=Enum.Material.Air then
+        if bhopOn and not UIS:GetFocusedTextBox() and UIS:IsKeyDown(Enum.KeyCode.Space) and hum.FloorMaterial~=Enum.Material.Air then
 
             hum.Jump=true
 
         end
-
-        updateFly(dt)
 
     end)
 
@@ -2132,61 +2038,17 @@ local function Main()
     local aimlockOn=false
     local aimbotSmoothness=6
     local aimHeadPart=true
-    local teamCheckOn=false
-    local fovLimitOn=false
-    local aimFovRadius=150
-    local showFovCircle=false
     local rmbHeld=false
-
-    local fovCircle=nil
-    if Drawing and Drawing.new then
-        pcall(function()
-            local c=Drawing.new("Circle")
-            c.Visible=false
-            c.Thickness=1.5
-            c.Filled=false
-            c.NumSides=64
-            c.Radius=aimFovRadius
-            c.Color=C.ACCENT
-            fovCircle=c
-        end)
-    end
-
-    local function updateFovCircle()
-        if not fovCircle then return end
-        local cam=workspace.CurrentCamera
-        if not cam or not showFovCircle then
-            pcall(function() fovCircle.Visible=false end)
-            return
-        end
-        pcall(function()
-            fovCircle.Position=Vector2.new(cam.ViewportSize.X*0.5,cam.ViewportSize.Y*0.5)
-            fovCircle.Radius=aimFovRadius
-            fovCircle.Color=C.ACCENT
-            fovCircle.Visible=true
-        end)
-    end
-
-    local function isTeammate(p)
-        if not teamCheckOn then return false end
-        if player.Team and p.Team and player.Team==p.Team then
-            return true
-        end
-        if not player.Neutral and not p.Neutral and player.TeamColor==p.TeamColor then
-            return true
-        end
-        return false
-    end
 
     local function getClosestTargetPart()
         local cam=workspace.CurrentCamera
         if not cam then return nil end
         local center=Vector2.new(cam.ViewportSize.X*0.5,cam.ViewportSize.Y*0.5)
         local bestPart=nil
-        local bestDist=fovLimitOn and aimFovRadius or math.huge
+        local bestDist=math.huge
 
         for _,p in ipairs(Players:GetPlayers()) do
-            if p~=player and p.Character and not isTeammate(p) then
+            if p~=player and p.Character then
                 local hum=p.Character:FindFirstChildOfClass("Humanoid")
                 local part=aimHeadPart and (p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart"))
                     or (p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Head"))
@@ -2226,35 +2088,14 @@ local function Main()
         aimbotSmoothness=v
     end)
 
-    toggleRow(combatLeft,3,"Enable FOV Limit","Restrict aiming to FOV radius",nil,function(v)
-        fovLimitOn=v
-        setStatus(v and "FOV LIMIT ON" or "FOV LIMIT OFF")
-    end)
-
-    sliderRow(combatLeft,4,"FOV Radius",30,500,150," px",function(v)
-        aimFovRadius=v
-    end)
-
     toggleRow(combatRight,1,"Aimlock","Lock camera onto nearest player",nil,function(v)
         aimlockOn=v
         setStatus(v and "AIMLOCK ON" or "AIMLOCK OFF")
     end)
 
-    toggleRow(combatRight,2,"Team Check","Ignore players on your team",nil,function(v)
-        teamCheckOn=v
-        setStatus(v and "TEAM CHECK ON" or "TEAM CHECK OFF")
-    end)
-
-    toggleRow(combatRight,3,"Target Head","Off targets HumanoidRootPart",nil,function(v)
+    toggleRow(combatRight,2,"Target Head","Off targets HumanoidRootPart",nil,function(v)
         aimHeadPart=v
         setStatus(v and "TARGET: HEAD" or "TARGET: ROOT")
-    end)
-
-    toggleRow(combatRight,4,"Show FOV Circle","Draw FOV radius circle on screen",nil,function(v)
-        showFovCircle=v
-        if not v and fovCircle then
-            pcall(function() fovCircle.Visible=false end)
-        end
     end)
 
     UIS.InputBegan:Connect(function(input,processed)
@@ -2847,20 +2688,11 @@ local function Main()
 
         end
 
-        flyOn=false
-
-        clearFlyObjects()
+        stopFly()
 
         aimbotOn=false
 
         aimlockOn=false
-
-        showFovCircle=false
-
-        if fovCircle then
-            pcall(function() fovCircle:Remove() end)
-            fovCircle=nil
-        end
 
         workspace.Gravity=origGravity
 
@@ -2986,15 +2818,9 @@ local function Main()
 
     player.CharacterAdded:Connect(function()
 
-        clearFlyObjects()
+        stopFly()
 
-        if flyOn then
-
-            task.wait(0.3)
-
-            if flyOn then setFlyState(true) end
-
-        end
+        if flyToggle then flyToggle.Set(false,true) end
 
         if hipOn then
 
@@ -3013,8 +2839,6 @@ local function Main()
     RunService.RenderStepped:Connect(function(dt)
 
         updateBoxEsp()
-
-        updateFovCircle()
 
         if aimlockOn then
 
