@@ -1,7 +1,7 @@
 --[[
 	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
 ]]
--- DARK MOON V1.2 (by wtf.biyxznd)
+-- DARK MOON V 1.2 | By biyxznd | Discord: https://discord.gg/QxRKp9wNeE
 
 -- Movement + Teleport + Troll + Misc + Settings
 
@@ -55,7 +55,7 @@ local function Main()
 
 
 
-    notify("Loading V1.2...")
+    notify("Loading V 1.2 (by biyxznd)...")
 
 
 
@@ -79,13 +79,9 @@ local function Main()
 
     pcall(function()
 
-        local old = parent:FindFirstChild("DarkMoonUI")
+        local old = parent:FindFirstChild("DarkMoon")
 
         if old then old:Destroy() end
-
-        local oldAdrin = parent:FindFirstChild("AdrinsScripts")
-
-        if oldAdrin then oldAdrin:Destroy() end
 
     end)
 
@@ -93,29 +89,29 @@ local function Main()
 
     local Defaults = {
 
-        bg = Color3.fromRGB(14,12,20),
+        bg = Color3.fromRGB(18,14,20),
 
-        side = Color3.fromRGB(19,16,27),
+        side = Color3.fromRGB(22,17,25),
 
-        row = Color3.fromRGB(26,22,36),
+        row = Color3.fromRGB(29,23,33),
 
-        rowHover = Color3.fromRGB(36,30,50),
+        rowHover = Color3.fromRGB(39,30,44),
 
-        text = Color3.fromRGB(238,236,248),
+        text = Color3.fromRGB(236,237,245),
 
-        sub = Color3.fromRGB(150,142,172),
+        sub = Color3.fromRGB(151,136,158),
 
-        ACCENT = Color3.fromRGB(178,136,245),
+        ACCENT = Color3.fromRGB(211,164,232),
 
-        off = Color3.fromRGB(54,46,72),
+        off = Color3.fromRGB(58,48,64),
 
         good = Color3.fromRGB(100,240,180),
 
         bad = Color3.fromRGB(240,80,100),
 
-        stroke = Color3.fromRGB(45,38,62),
+        stroke = Color3.fromRGB(49,39,55),
 
-        chip = Color3.fromRGB(22,18,31)
+        chip = Color3.fromRGB(25,19,28)
 
     }
 
@@ -179,7 +175,7 @@ local function Main()
 
     local gui = make("ScreenGui", {
 
-        Name="DarkMoonUI",
+        Name="DarkMoon",
 
         ResetOnSpawn=false,
 
@@ -242,104 +238,49 @@ local function Main()
     make("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.fromOffset(100,0),BackgroundColor3=C.stroke,BorderSizePixel=0},window)
 
     local searchFrame=make("Frame",{
-
         Name="SearchContainer",
-
         Size=UDim2.fromOffset(170,30),
-
         Position=UDim2.new(1,-258,0,17),
-
         BackgroundColor3=C.chip,
-
         BorderSizePixel=0
-
     },header)
-
     corner(searchFrame,8)
-
     outline(searchFrame)
 
-
-
     -- Draw a small magnifying glass with UI shapes instead of a font emoji.
-
     local searchLens=make("Frame",{
-
         Size=UDim2.fromOffset(9,9),
-
         Position=UDim2.fromOffset(10,8),
-
         BackgroundTransparency=1,
-
         BorderSizePixel=0
-
     },searchFrame)
-
     corner(searchLens,8)
-
     make("UIStroke",{Color=C.sub,Thickness=1.7},searchLens)
-
     make("Frame",{
-
         Size=UDim2.fromOffset(6,2),
-
         Position=UDim2.fromOffset(17,18),
-
         Rotation=45,
-
         BackgroundColor3=C.sub,
-
         BorderSizePixel=0
-
     },searchFrame)
-
-
 
     local searchBox=make("TextBox",{
-
         Name="Search",
-
         Size=UDim2.new(1,-34,1,0),
-
         Position=UDim2.fromOffset(29,0),
-
         BackgroundTransparency=1,
-
         Text="",
-
         PlaceholderText="Search features",
-
         PlaceholderColor3=C.sub,
-
         TextColor3=C.text,
-
         Font=Enum.Font.Gotham,
-
         TextSize=10,
-
         TextXAlignment=Enum.TextXAlignment.Left,
-
         ClearTextOnFocus=false,
-
         BorderSizePixel=0
-
     },searchFrame)
 
-
-
-    local function getSecondaryAccent(accent)
-
-        local h, s, v = accent:ToHSV()
-
-        return Color3.fromHSV((h + 0.04) % 1, math.clamp(s * 0.9, 0, 1), math.clamp(v * 0.72, 0, 1))
-
-    end
-
-
-
     local logo = make("Frame",{
-
-        Name="MoonLogo",
 
         Size=UDim2.fromOffset(32,32),
 
@@ -347,9 +288,7 @@ local function Main()
 
         BackgroundColor3=C.ACCENT,
 
-        BorderSizePixel=0,
-
-        ClipsDescendants=true
+        BorderSizePixel=0
 
     },header)
 
@@ -357,7 +296,7 @@ local function Main()
 
     local logoGradient = make("UIGradient",{
 
-        Color=ColorSequence.new(C.ACCENT, getSecondaryAccent(C.ACCENT)),
+        Color=ColorSequence.new(C.ACCENT,Color3.fromRGB(157,116,190)),
 
         Rotation=45
 
@@ -365,55 +304,40 @@ local function Main()
 
 
 
-    -- Crescent moon drawn with overlapping circular frames so it renders cleanly on any executor font.
-
-    make("Frame",{
-
-        Name="MoonDisc",
-
-        Size=UDim2.fromOffset(18,18),
-
-        Position=UDim2.fromOffset(6,7),
-
-        BackgroundColor3=Color3.fromRGB(252,248,255),
-
-        BorderSizePixel=0
-
+    -- Brand mark: use a standard Roblox font glyph, not emoji or special symbols.
+    -- The offset shadow and slight tilt give the A a more distinctive badge style.
+    make("TextLabel",{
+        Name="LogoLetterShadow",
+        Size=UDim2.fromScale(1,1),
+        Position=UDim2.fromOffset(1,2),
+        BackgroundTransparency=1,
+        Text="A",
+        Font=Enum.Font.GothamBlack,
+        TextSize=23,
+        TextColor3=Color3.fromRGB(89,52,112),
+        TextXAlignment=Enum.TextXAlignment.Center,
+        TextYAlignment=Enum.TextYAlignment.Center,
+        Rotation=-8
     },logo)
 
-    corner(logo:FindFirstChild("MoonDisc"),9)
-
-
-
-    local moonCutout = make("Frame",{
-
-        Name="MoonCutout",
-
-        Size=UDim2.fromOffset(15,15),
-
-        Position=UDim2.fromOffset(12,4),
-
-        BackgroundColor3=C.ACCENT,
-
-        BorderSizePixel=0
-
+    make("TextLabel",{
+        Name="LogoLetter",
+        Size=UDim2.fromScale(1,1),
+        BackgroundTransparency=1,
+        Text="A",
+        Font=Enum.Font.GothamBlack,
+        TextSize=23,
+        TextColor3=Color3.fromRGB(255,250,255),
+        TextStrokeColor3=Color3.fromRGB(142,92,170),
+        TextStrokeTransparency=0.55,
+        TextXAlignment=Enum.TextXAlignment.Center,
+        TextYAlignment=Enum.TextYAlignment.Center,
+        Rotation=-8
     },logo)
-
-    corner(moonCutout,8)
-
-    local moonCutoutGrad = make("UIGradient",{
-
-        Color=ColorSequence.new(C.ACCENT, getSecondaryAccent(C.ACCENT)),
-
-        Rotation=45
-
-    },moonCutout)
 
 
 
     make("TextLabel",{
-
-        Name="BrandTitle",
 
         Size=UDim2.fromOffset(240,18),
 
@@ -421,7 +345,7 @@ local function Main()
 
         BackgroundTransparency=1,
 
-        Text="DARK MOON  ·  V1.2",
+        Text="Main",
 
         Font=Enum.Font.GothamBold,
 
@@ -436,28 +360,18 @@ local function Main()
 
 
     local gameTitleLabel=make("TextLabel",{
-
         Name="ExperienceName",
-
         Size=UDim2.fromOffset(240,14),
-
         Position=UDim2.fromOffset(120,36),
-
         BackgroundTransparency=1,
-
         Text=game.Name,
-
         Font=Enum.Font.Gotham,
-
         TextSize=11,
-
         TextColor3=C.sub,
-
         TextXAlignment=Enum.TextXAlignment.Left,
-
         TextTruncate=Enum.TextTruncate.AtEnd
-
     },header)
+
 
 
 
@@ -577,183 +491,94 @@ local function Main()
 
     },tabList)
 
-
-
+    -- Airflow-style player profile: centered avatar, full name, username, and game.
     local profile=make("Frame",{
-
         Name="PlayerProfile",
-
         Size=UDim2.new(1,-12,0,106),
-
         Position=UDim2.new(0,6,1,-112),
-
         BackgroundColor3=C.row,
-
         BorderSizePixel=0
-
     },sidebar)
-
     corner(profile,10)
-
     outline(profile)
 
-
-
     local avatar=make("ImageLabel",{
-
         Name="Avatar",
-
         Size=UDim2.fromOffset(34,34),
-
         Position=UDim2.new(0.5,-17,0,6),
-
         BackgroundColor3=C.chip,
-
         Image="",
-
         ScaleType=Enum.ScaleType.Crop,
-
         BorderSizePixel=0
-
     },profile)
-
     corner(avatar,17)
-
     outline(avatar)
 
-
-
     make("TextLabel",{
-
         Name="PlayerDisplayName",
-
         Size=UDim2.new(1,-8,0,15),
-
         Position=UDim2.fromOffset(4,43),
-
         BackgroundTransparency=1,
-
         Text=player.DisplayName,
-
         Font=Enum.Font.GothamBold,
-
         TextSize=9,
-
         TextColor3=C.text,
-
         TextXAlignment=Enum.TextXAlignment.Center,
-
         TextTruncate=Enum.TextTruncate.AtEnd
-
     },profile)
-
-
 
     make("TextLabel",{
-
         Name="PlayerUsername",
-
         Size=UDim2.new(1,-8,0,13),
-
         Position=UDim2.fromOffset(4,58),
-
         BackgroundTransparency=1,
-
         Text="@"..player.Name,
-
         Font=Enum.Font.Gotham,
-
         TextSize=8,
-
         TextColor3=C.sub,
-
         TextXAlignment=Enum.TextXAlignment.Center,
-
         TextTruncate=Enum.TextTruncate.AtEnd
-
     },profile)
-
-
 
     local profileGameLabel=make("TextLabel",{
-
         Name="CurrentExperience",
-
         Size=UDim2.new(1,-8,0,15),
-
         Position=UDim2.fromOffset(4,77),
-
         BackgroundTransparency=1,
-
         Text=game.Name,
-
         Font=Enum.Font.Gotham,
-
         TextSize=7,
-
         TextColor3=C.sub,
-
         TextXAlignment=Enum.TextXAlignment.Center,
-
         TextTruncate=Enum.TextTruncate.AtEnd
-
     },profile)
 
-
-
     task.spawn(function()
-
         local ok,thumbnail=pcall(function()
-
             return Players:GetUserThumbnailAsync(
-
                 player.UserId,
-
                 Enum.ThumbnailType.HeadShot,
-
                 Enum.ThumbnailSize.Size100x100
-
             )
-
         end)
-
         if ok and avatar and avatar.Parent then
-
             avatar.Image=thumbnail
-
         end
-
     end)
-
-
 
     task.spawn(function()
-
         local ok,info=pcall(function()
-
             return MarketplaceService:GetProductInfo(game.PlaceId)
-
         end)
-
         if ok and info and info.Name then
-
             if profileGameLabel and profileGameLabel.Parent then
-
                 profileGameLabel.Text=info.Name
-
             end
-
             if gameTitleLabel and gameTitleLabel.Parent then
-
                 gameTitleLabel.Text=info.Name
-
             end
-
         end
-
     end)
-
-
 
     local content=make("Frame",{
 
@@ -801,9 +626,9 @@ local function Main()
 
     local pages,tabs={},{}
 
+    -- Use plain ASCII monograms instead of Unicode symbols/emoji.
+    -- Some Roblox executor fonts do not include those glyphs and render them as squares.
     local tabIcons={Movement="M",Teleport="TP",Troll="TR",Misc="MX",Settings="S"}
-
-
 
     local function showPage(name)
 
@@ -951,11 +776,18 @@ local function Main()
 
             PaddingLeft=UDim.new(0,8),
 
+            PaddingLeft=UDim.new(0,8),
+
             PaddingRight=UDim.new(0,8),
+
+            PaddingTop=UDim.new(0,8),
 
             PaddingBottom=UDim.new(0,8)
 
         },col)
+
+        corner(col,9)
+        outline(col)
 
         make("UIListLayout",{
 
@@ -1383,7 +1215,7 @@ local function Main()
 
 
 
-    -- MOVEMENT
+    -- MOVEMENT*
 
     local moveTab=newTab("Movement",1)
 
@@ -1429,7 +1261,7 @@ local function Main()
 
 
 
-    local jumpToggle=toggleRow(left,3,"Enable JumpPower",nil,Enum.KeyCode.N,function(v)
+    toggleRow(left,3,"Enable JumpPower",nil,Enum.KeyCode.N,function(v)
 
         jumpEnabled=v
 
@@ -1613,7 +1445,7 @@ local function Main()
 
 
 
-    -- Vehicle Fly
+    -- Vehicle Fly*
 
     local vehicleFlying=false
 
@@ -1909,7 +1741,7 @@ local function Main()
 
 
 
-    -- TELEPORT
+    -- TELEPORT*
 
     local tpTab=newTab("Teleport",2)
 
@@ -2065,7 +1897,7 @@ local function Main()
 
 
 
-    -- TROLL
+    -- TROLL*
 
     local trollTab=newTab("Troll",3)
 
@@ -2343,7 +2175,7 @@ local function Main()
 
 
 
-    -- MISC
+    -- MISC*
 
     local miscTab=newTab("Misc",4)
 
@@ -2561,7 +2393,7 @@ local function Main()
 
 
 
-    -- SETTINGS
+    -- SETTINGS*
 
     local settingsTab=newTab("Settings",5)
 
@@ -2645,15 +2477,9 @@ local function Main()
 
 
 
-        local gradSeq=ColorSequence.new(C.ACCENT,getSecondaryAccent(C.ACCENT))
-
         logo.BackgroundColor3=C.ACCENT
 
-        logoGradient.Color=gradSeq
-
-        moonCutout.BackgroundColor3=C.ACCENT
-
-        moonCutoutGrad.Color=gradSeq
+        logoGradient.Color=ColorSequence.new(C.ACCENT,Color3.fromRGB(157,116,190))
 
         setStatus("UPDATED "..key:upper().." COLOUR")
 
@@ -2927,13 +2753,13 @@ local function Main()
 
 
 
-    -- ACTIVE KEYBINDS PANEL
+    -- ACTIVE KEYBINDS PANEL*
 
     local panelEntries={
 
         {"WalkSpeed","B",walkToggle},
 
-        {"JumpPower","N",jumpToggle},
+        {"JumpPower","N",nil},
 
         {"Infinite Jump","J",infJumpToggle},
 
@@ -3069,7 +2895,7 @@ local function Main()
 
 
 
-    -- MENU CONTROLS
+    -- MENU CONTROLS*
 
     local isOpen=true
 
@@ -3241,9 +3067,9 @@ local function Main()
 
     setStatus("READY | RIGHT SHIFT: MENU")
 
-    notify("V1.2 Loaded!")
+    notify("V 1.2 Loaded! | by biyxznd | Discord: https://discord.gg/QxRKp9wNeE")
 
-    print("DARK MOON V1.2 LOADED")
+    print("DARK MOON V 1.2 LOADED | BY BIYXZND | DISCORD: https://discord.gg/QxRKp9wNeE")
 
     print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP | F = FLY | G = VEHICLE FLY")
 
