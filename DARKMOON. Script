@@ -44,8 +44,10 @@ getgenv().MM2State = {
     KnifeHitboxExpander = false,
     ThrowAura = false,
     CoinMagnet = false,
-    UIScaleMode = "Standard",
-    UIStyleMode = "DarkMoon",
+    SpeedHackEnabled = false,
+    WalkSpeedValue = 32,
+    PanelSizePreset = "Big",
+    DevicePreset = UserInputService.TouchEnabled and "Mobile" or "PC",
     Connections = {},
     Highlights = {},
     GunHighlights = {},
@@ -117,6 +119,16 @@ trackConn(Players.PlayerRemoving:Connect(function(plr)
     end
     C.AnnouncedKillers[plr] = nil
     C.AnnouncedSheriffs[plr] = nil
+end))
+
+trackConn(LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.25)
+    if C.SpeedHackEnabled then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = C.WalkSpeedValue
+        end
+    end
 end))
 
 -- Loading Screen
@@ -196,7 +208,7 @@ end)
 
 -- Floating Lunar Toggle Button
 local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(0, 46, 0, 46)
+ToggleBtn.Size = UDim2.new(0, 48, 0, 48)
 ToggleBtn.Position = UDim2.new(0, 20, 0.38, 0)
 ToggleBtn.BackgroundColor3 = PanelBg
 ToggleBtn.Text = "🌑"
@@ -228,7 +240,7 @@ MainFrameStroke.Thickness = 1.4
 MainFrameStroke.Transparency = 0.25
 
 local UIScale = Instance.new("UIScale")
-UIScale.Scale = 1
+UIScale.Scale = UserInputService.TouchEnabled and 0.84 or 1.0
 UIScale.Parent = MainFrame
 
 ToggleBtn.MouseButton1Click:Connect(function()
@@ -487,7 +499,7 @@ local TabTeleport = AddTab("Teleport", "Işınlanma")
 local TabPlayer = AddTab("Player", "Karakter")
 local TabTroll = AddTab("God-Fling", "God-Fling")
 local TabVisuals = AddTab("Visuals", "Görseller")
-local TabUIAdjust = AddTab("UI Adjust", "UI Ayarları")
+local TabUIAdjust = AddTab("UI Adjust", "Panel Ayarları")
 local TabFrame = AddTab("Moon Accent", "Ay Teması")
 local TabSettings = AddTab("Settings", "Ayarlar")
 
@@ -499,12 +511,15 @@ TabInnocent:AddToggle("Auto Grab & Return Gun", "Silahı Otomatik Al ve Geri Ver
             pcall(function()
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    local originalPos = hrp.CFrame
                     for _, obj in pairs(Workspace:GetChildren()) do
-                        if obj.Name == "GunDrop" and obj:IsA("BasePart") then
+                        if not C.AutoGrabAndReturnGun then break end
+                        if obj.Name == "GunDrop" and obj:IsA("BasePart") and obj.Parent then
+                            local originalPos = hrp.CFrame
                             hrp.CFrame = obj.CFrame + Vector3.new(0, 1, 0)
-                            task.wait(0.3)
-                            hrp.CFrame = originalPos
+                            task.wait(0.25)
+                            if hrp and hrp.Parent then
+                                hrp.CFrame = originalPos
+                            end
                         end
                     end
                 end
@@ -839,14 +854,15 @@ end)
 TabFarm:AddToggle("Coin Magnet (Pull Coins to You)", "Coin Mıknatısı (Coinleri Kendine Çek)", false, function(state)
     C.CoinMagnet = state
     task.spawn(function()
-        while C.CoinMagnet and task.wait(0.2) do
+        while C.CoinMagnet and task.wait(0.15) do
             pcall(function()
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
+                    local pullTarget = hrp.CFrame + (hrp.CFrame.LookVector * 1.5)
                     for _, obj in pairs(Workspace:GetDescendants()) do
                         if obj:IsA("BasePart") and (obj.Name:lower():find("coin") or obj.BrickColor == BrickColor.new("Bright yellow")) then
-                            if (hrp.Position - obj.Position).Magnitude < 40 then
-                                obj.CFrame = hrp.CFrame
+                            if (hrp.Position - obj.Position).Magnitude < 45 and obj.Transparency == 0 then
+                                obj.CFrame = pullTarget
                             end
                         end
                     end
@@ -891,12 +907,26 @@ end)
 
 -- 7. PLAYER
 TabPlayer:AddToggle("WalkSpeed (Speed Hack)", "Koşma Hızı (Speed Hack)", false, function(state)
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-    if hum then hum.WalkSpeed = state and 32 or 16 end
+    C.SpeedHackEnabled = state
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = state and C.WalkSpeedValue or 16 end
 end)
 
 TabPlayer:AddToggle("Noclip", "Noclip (Duvarlardan Geçme)", false, function(state)
     C.Noclip = state
+    if not state then
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end)
+        return
+    end
     task.spawn(function()
         while C.Noclip do
             pcall(function()
@@ -1055,10 +1085,22 @@ end)
 TabVisuals:AddButton("Set FOV to 120", "Görüş Açısını (FOV) 120 Yap", function() Camera.FieldOfView = 120 end)
 TabVisuals:AddButton("Reset FOV to Default", "Görüş Açısını (FOV) Sıfırla", function() Camera.FieldOfView = 70 end)
 
--- 10. UI ADJUST SYSTEM
-local function applyUIScale(scaleVal, modeLabel)
-    C.UIScaleMode = modeLabel
+-- 10. PANEL ADJUSTMENTS (SMALL / BIG & MOBILE / PC)
+local function applyUIScale(scaleVal, sizeLabel)
+    C.PanelSizePreset = sizeLabel
     TweenService:Create(UIScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Scale = scaleVal}):Play()
+end
+
+local function applyDeviceLayout(deviceLabel, scaleVal, pos, togglePos)
+    C.DevicePreset = deviceLabel
+    C.PanelSizePreset = deviceLabel
+    TweenService:Create(UIScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad), {Scale = scaleVal}):Play()
+    if pos then
+        TweenService:Create(MainFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad), {Position = pos}):Play()
+    end
+    if togglePos then
+        ToggleBtn.Position = togglePos
+    end
 end
 
 local function applyUITransparency(bgTransp, panelTransp)
@@ -1077,14 +1119,27 @@ local function applyUITransparency(bgTransp, panelTransp)
     end
 end
 
-TabUIAdjust:AddButton("Scale: Compact (0.88x)", "Boyut: Küçük (0.88x)", function()
-    applyUIScale(0.88, "Compact")
+TabUIAdjust:AddButton("Panel Size: Small", "Panel Boyutu: Küçük", function()
+    applyUIScale(0.78, "Small")
 end)
-TabUIAdjust:AddButton("Scale: Standard (1.00x)", "Boyut: Standart (1.00x)", function()
-    applyUIScale(1.0, "Standard")
+TabUIAdjust:AddButton("Panel Size: Big", "Panel Boyutu: Büyük", function()
+    applyUIScale(1.12, "Big")
 end)
-TabUIAdjust:AddButton("Scale: Large (1.15x)", "Boyut: Büyük (1.15x)", function()
-    applyUIScale(1.15, "Large")
+TabUIAdjust:AddButton("Mode: Mobile Layout", "Mod: Mobil Düzen", function()
+    applyDeviceLayout(
+        "Mobile",
+        0.76,
+        UDim2.new(0.5, -320, 0.5, -230),
+        UDim2.new(0, 14, 0.25, 0)
+    )
+end)
+TabUIAdjust:AddButton("Mode: PC Layout", "Mod: PC Düzen", function()
+    applyDeviceLayout(
+        "PC",
+        1.05,
+        UDim2.new(0.5, -320, 0.5, -230),
+        UDim2.new(0, 20, 0.38, 0)
+    )
 end)
 TabUIAdjust:AddButton("Opacity: Solid Dark Moon", "Opaklık: Tam Koyu Ay", function()
     applyUITransparency(0, 0)
@@ -1092,9 +1147,8 @@ end)
 TabUIAdjust:AddButton("Opacity: Translucent Eclipse", "Opaklık: Yarı Saydam Tutulma", function()
     applyUITransparency(0.18, 0.24)
 end)
-TabUIAdjust:AddButton("Center Window Position", "Pencereyi Ortala", function()
+TabUIAdjust:AddButton("Center Panel Position", "Paneli Ortala", function()
     MainFrame.Position = UDim2.new(0.5, -320, 0.5, -230)
-    ToggleBtn.Position = UDim2.new(0, 20, 0.38, 0)
 end)
 
 -- 11. MOON ACCENT THEMES
