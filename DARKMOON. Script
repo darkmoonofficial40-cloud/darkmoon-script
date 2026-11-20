@@ -1,10 +1,10 @@
 --[[
-	Murder Mystery 2 | darkmoon (Midnight Blue)
+	Murder Mystery 2 | DarkUI (Midnight Blue)
 	Visuals, Combat, Auto Farm, Fling, Protection, Innocent, Misc, Movement, Player, Optimization + Admin Patch
 	Imagem do botão flutuante e do fundo da UI: rbxassetid://18280618252
 ]]
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/darkmoonofficial40-cloud/darkmoon-script/refs/heads/main/DARKMOON.%20Script"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/neons99222script-del/Dark-Lib-V3/refs/heads/main/Uilibrary.Lua"))()
 
 -- ============================================
 -- SERVIÇOS / VARIÁVEIS
