@@ -197,46 +197,281 @@ local function Main()
 
 
 
-    -- Floating FPS & Ping HUD (toggled from Visual tab)
-    local hudPill=make("Frame",{
-        Name="PerfHud",
-        Size=UDim2.fromOffset(164,28),
-        Position=UDim2.new(1,-180,0,16),
+    -- Top-right compact draggable FPS & Ping HUD pill
+
+    local hudPill = make("Frame",{
+
+        Name="FpsPingHud",
+
+        Size=UDim2.fromOffset(176,30),
+
+        Position=UDim2.new(1,-190,0,14),
+
         BackgroundColor3=C.bg,
+
         BorderSizePixel=0,
-        Visible=false
+
+        Visible=true
+
     },gui)
-    corner(hudPill,8)
+
+    corner(hudPill,15)
+
     outline(hudPill)
 
-    local hudLabel=make("TextLabel",{
-        Size=UDim2.fromScale(1,1),
-        BackgroundTransparency=1,
-        Text="FPS: 60 | PING: 0 ms",
-        Font=Enum.Font.GothamBold,
-        TextSize=11,
-        TextColor3=C.text
+
+
+    local hudDot = make("Frame",{
+
+        Name="AccentDot",
+
+        Size=UDim2.fromOffset(8,8),
+
+        Position=UDim2.new(0,11,0.5,-4),
+
+        BackgroundColor3=C.ACCENT,
+
+        BorderSizePixel=0
+
     },hudPill)
 
-    local hudDrag,hudStart,hudPos
+    corner(hudDot,4)
+
+
+
+    local hudFpsLabel = make("TextLabel",{
+
+        Name="FpsText",
+
+        Size=UDim2.fromOffset(72,20),
+
+        Position=UDim2.new(0,24,0.5,-10),
+
+        BackgroundTransparency=1,
+
+        Text="FPS: --",
+
+        Font=Enum.Font.GothamBold,
+
+        TextSize=11,
+
+        TextColor3=C.text,
+
+        TextXAlignment=Enum.TextXAlignment.Left
+
+    },hudPill)
+
+
+
+    local hudSep = make("TextLabel",{
+
+        Name="Separator",
+
+        Size=UDim2.fromOffset(10,20),
+
+        Position=UDim2.new(0,95,0.5,-10),
+
+        BackgroundTransparency=1,
+
+        Text="·",
+
+        Font=Enum.Font.GothamBold,
+
+        TextSize=12,
+
+        TextColor3=C.sub,
+
+        TextXAlignment=Enum.TextXAlignment.Center
+
+    },hudPill)
+
+
+
+    local hudPingLabel = make("TextLabel",{
+
+        Name="PingText",
+
+        Size=UDim2.fromOffset(66,20),
+
+        Position=UDim2.new(0,106,0.5,-10),
+
+        BackgroundTransparency=1,
+
+        Text="Ping: --ms",
+
+        Font=Enum.Font.GothamBold,
+
+        TextSize=11,
+
+        TextColor3=C.good,
+
+        TextXAlignment=Enum.TextXAlignment.Left
+
+    },hudPill)
+
+
+
+    local hudDragging,hudDragStart,hudStartPos=false,nil,nil
+
     hudPill.InputBegan:Connect(function(input)
+
         if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-            hudDrag=true
-            hudStart=input.Position
-            hudPos=hudPill.Position
+
+            hudDragging=true
+
+            hudDragStart=input.Position
+
+            hudStartPos=hudPill.Position
+
         end
+
     end)
+
+
+
     UIS.InputChanged:Connect(function(input)
-        if hudDrag and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
-            local d=input.Position-hudStart
-            hudPill.Position=UDim2.new(hudPos.X.Scale,hudPos.X.Offset+d.X,hudPos.Y.Scale,hudPos.Y.Offset+d.Y)
+
+        if hudDragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
+
+            local delta=input.Position-hudDragStart
+
+            hudPill.Position=UDim2.new(
+
+                hudStartPos.X.Scale,
+
+                hudStartPos.X.Offset+delta.X,
+
+                hudStartPos.Y.Scale,
+
+                hudStartPos.Y.Offset+delta.Y
+
+            )
+
         end
+
     end)
+
+
+
     UIS.InputEnded:Connect(function(input)
+
         if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-            hudDrag=false
+
+            hudDragging=false
+
         end
+
     end)
+
+
+
+    local fpsAccumFrames=0
+
+    local fpsAccumTime=0
+
+    local pingAccumTime=0
+
+    local hudEnabled=true
+
+
+
+    local function readPingMs()
+
+        local ok,pingVal=pcall(function()
+
+            local net=Stats and Stats:FindFirstChild("Network")
+
+            local item=net and net:FindFirstChild("ServerStatsItem")
+
+            local pingItem=item and item:FindFirstChild("Data Ping")
+
+            if pingItem and pingItem.GetValue then
+
+                return pingItem:GetValue()
+
+            end
+
+            return nil
+
+        end)
+
+        if ok and type(pingVal)=="number" and pingVal>=0 then
+
+            return math.floor(pingVal+0.5)
+
+        end
+
+        local ok2,pingSec=pcall(function()
+
+            return player:GetNetworkPing()
+
+        end)
+
+        if ok2 and type(pingSec)=="number" and pingSec>=0 then
+
+            return math.floor(pingSec*1000+0.5)
+
+        end
+
+        return nil
+
+    end
+
+
+
+    local function stepFpsPingHud(dt)
+
+        if not hudEnabled or not hudPill or not hudPill.Parent then return end
+
+        local step=dt or 0.016
+
+        fpsAccumFrames=fpsAccumFrames+1
+
+        fpsAccumTime=fpsAccumTime+step
+
+        pingAccumTime=pingAccumTime+step
+
+
+
+        if fpsAccumTime>=0.35 then
+
+            local fps=math.clamp(math.floor((fpsAccumFrames/fpsAccumTime)+0.5),1,999)
+
+            fpsAccumFrames=0
+
+            fpsAccumTime=0
+
+            hudFpsLabel.Text="FPS: "..tostring(fps)
+
+            hudFpsLabel.TextColor3=fps>=50 and C.text or (fps>=25 and C.sub or C.bad)
+
+        end
+
+
+
+        if pingAccumTime>=0.6 then
+
+            pingAccumTime=0
+
+            local ms=readPingMs()
+
+            if ms~=nil then
+
+                hudPingLabel.Text="Ping: "..tostring(ms).."ms"
+
+                hudPingLabel.TextColor3=ms<=100 and C.good or (ms<=200 and C.sub or C.bad)
+
+            else
+
+                hudPingLabel.Text="Ping: --ms"
+
+                hudPingLabel.TextColor3=C.sub
+
+            end
+
+        end
+
+    end
 
 
 
@@ -1347,10 +1582,6 @@ local function Main()
 
     local bhopOn,infJumpEnabled,noclipOn=false,false,false
 
-    local airDashOn=false
-    local airDashPower=95
-    local lastDashTime=0
-
     local antiFlingOn=false
 
     local antiFlingCache={}
@@ -1370,46 +1601,6 @@ local function Main()
     local mobileJumpBoostUntil=0
 
     local savedJoints={}
-
-
-
-    local function triggerAirDash()
-
-        if not airDashOn then return end
-
-        if os.clock()-lastDashTime<0.65 then return end
-
-        local _,root,hum=getChar()
-
-        local cam=workspace.CurrentCamera
-
-        if not root or not hum or not cam then return end
-
-
-
-        lastDashTime=os.clock()
-
-        local dir=hum.MoveDirection
-
-        if dir.Magnitude<0.05 then
-
-            dir=Vector3.new(cam.CFrame.LookVector.X,0,cam.CFrame.LookVector.Z)
-
-        end
-
-        if dir.Magnitude<1e-4 then
-
-            dir=root.CFrame.LookVector
-
-        end
-
-        dir=Vector3.new(dir.X,0,dir.Z).Unit
-
-        root.AssemblyLinearVelocity=dir*airDashPower+Vector3.new(0,22,0)
-
-        setStatus("AIR DASH")
-
-    end
 
 
 
@@ -1571,7 +1762,7 @@ local function Main()
 
 
 
-        local maxLinVel=flying and math.max(flySpeed*1.35,140) or math.max(airDashPower*1.25,115)
+        local maxLinVel=flying and math.max(flySpeed*1.35,140) or 110
 
         local maxAngVel=28
 
@@ -2145,18 +2336,6 @@ local function Main()
 
 
 
-    toggleRow(left,9,"Air Dash","Press Q to dash forward",nil,function(v)
-
-        airDashOn=v
-
-        setStatus(v and "AIR DASH ON (Q)" or "AIR DASH OFF")
-
-    end)
-
-    sliderRow(left,10,"Dash Power",30,250,95,"",function(v) airDashPower=v end)
-
-
-
     UIS.JumpRequest:Connect(function()
 
         if flying then
@@ -2327,13 +2506,11 @@ local function Main()
 
     local tpLeft=column(tpTab,0,0.5,"Select Player")
 
-    local tpRight=column(tpTab,0.5,0.5,"Actions & Waypoints")
+    local tpRight=column(tpTab,0.5,0.5,"Actions")
 
     local selectedPlayer
 
     local playerButtons={}
-
-    local savedWaypoint=nil
 
 
 
@@ -2473,50 +2650,6 @@ local function Main()
 
 
 
-    buttonRow(tpRight,4,"SAVE WAYPOINT",C.row,function()
-
-        local _,root=getChar()
-
-        if not root then
-
-            setStatus("NO CHARACTER",C.bad)
-
-            return
-
-        end
-
-        savedWaypoint=root.CFrame
-
-        setStatus("WAYPOINT SAVED")
-
-    end)
-
-
-
-    buttonRow(tpRight,5,"TELEPORT TO WAYPOINT",C.row,function()
-
-        if not savedWaypoint then
-
-            setStatus("SAVE A WAYPOINT FIRST",C.bad)
-
-            return
-
-        end
-
-        local _,root=getChar()
-
-        if root then
-
-            root.CFrame=savedWaypoint
-
-            setStatus("TELEPORTED TO WAYPOINT")
-
-        end
-
-    end)
-
-
-
     Players.PlayerAdded:Connect(refreshPlayers)
 
     Players.PlayerRemoving:Connect(function() task.defer(refreshPlayers) end)
@@ -2539,9 +2672,7 @@ local function Main()
 
     local origGravity=workspace.Gravity
 
-    local followOn,spectateOn,orbitOn=false,false,false
-
-    local orbitRadius,orbitSpeed,orbitAngle=10,4,0
+    local followOn,spectateOn=false,false
 
     local followTimer=0
 
@@ -2643,22 +2774,6 @@ local function Main()
 
 
 
-    local orbitToggle
-
-    orbitToggle=toggleRow(trollRight,4,"Orbit Player","Circle around selected player",nil,function(v)
-
-        if v and not needTarget(orbitToggle) then return end
-
-        orbitOn=v
-
-    end)
-
-    sliderRow(trollRight,5,"Orbit Radius",4,30,10," studs",function(v) orbitRadius=v end)
-
-    sliderRow(trollRight,6,"Orbit Speed",1,15,4,"",function(v) orbitSpeed=v end)
-
-
-
     RunService.Heartbeat:Connect(function(dt)
 
         targetLabel.Text=selectedPlayer and ("Target: "..selectedPlayer.Name) or "No player selected (use Teleport tab)"
@@ -2697,30 +2812,6 @@ local function Main()
 
 
 
-        if orbitOn then
-
-            if targetRoot then
-
-                orbitAngle=orbitAngle+(dt or 0.016)*orbitSpeed
-
-                local offset=Vector3.new(math.cos(orbitAngle)*orbitRadius,1.5,math.sin(orbitAngle)*orbitRadius)
-
-                local pos=targetRoot.Position+offset
-
-                root.AssemblyLinearVelocity=Vector3.zero
-
-                root.CFrame=CFrame.lookAt(pos,targetRoot.Position)
-
-            else
-
-                orbitToggle.Set(false)
-
-            end
-
-        end
-
-
-
         if spectateOn then
 
             if targetHum then
@@ -2745,18 +2836,15 @@ local function Main()
 
     local visualLeft=column(visualTab,0,0.5,"Visuals")
 
-    local visualRight=column(visualTab,0.5,0.5,"HUD & Extras")
+    local visualRight=column(visualTab,0.5,0.5,"Options")
 
 
 
     local boxEspOn=false
     local tracersOn=false
     local nameEspOn=false
-    local healthBarOn=false
-    local perfHudOn=false
     local boxEspDrawings={}
     local tracerDrawings={}
-    local healthBarDrawings={}
     local nameGuis={}
 
     local function createBoxDrawing()
@@ -2784,23 +2872,6 @@ local function Main()
         return ok and line or nil
     end
 
-    local function createHealthBarDrawing()
-        if not Drawing or not Drawing.new then return nil end
-        local ok,pair=pcall(function()
-            local bg=Drawing.new("Line")
-            bg.Visible=false
-            bg.Thickness=4
-            bg.Color=Color3.fromRGB(20,20,24)
-
-            local fg=Drawing.new("Line")
-            fg.Visible=false
-            fg.Thickness=2.2
-            fg.Color=C.good
-            return {bg=bg,fg=fg}
-        end)
-        return ok and pair or nil
-    end
-
     local function removeBoxDrawing(p)
         local sq=boxEspDrawings[p]
         if sq then
@@ -2817,19 +2888,10 @@ local function Main()
         end
     end
 
-    local function removeHealthBarDrawing(p)
-        local pair=healthBarDrawings[p]
-        if pair then
-            pcall(function() pair.bg:Remove() end)
-            pcall(function() pair.fg:Remove() end)
-            healthBarDrawings[p]=nil
-        end
-    end
-
     local function removeNameGui(p)
         local g=nameGuis[p]
         if g then
-            pcall(function() g.gui:Destroy() end)
+            pcall(function() g:Destroy() end)
             nameGuis[p]=nil
         end
     end
@@ -2843,12 +2905,6 @@ local function Main()
     local function clearTracers()
         for p,_ in pairs(tracerDrawings) do
             removeTracerDrawing(p)
-        end
-    end
-
-    local function clearHealthBars()
-        for p,_ in pairs(healthBarDrawings) do
-            removeHealthBarDrawing(p)
         end
     end
 
@@ -2947,66 +3003,6 @@ local function Main()
         end
     end
 
-    local function updateHealthBars()
-        if not healthBarOn then
-            for _,pair in pairs(healthBarDrawings) do
-                pcall(function() pair.bg.Visible=false end)
-                pcall(function() pair.fg.Visible=false end)
-            end
-            return
-        end
-
-        local cam=workspace.CurrentCamera
-        if not cam then return end
-
-        for _,p in ipairs(Players:GetPlayers()) do
-            if p~=player then
-                local pair=healthBarDrawings[p]
-                if not pair then
-                    pair=createHealthBarDrawing()
-                    if pair then healthBarDrawings[p]=pair end
-                end
-
-                local char=p.Character
-                local root=char and char:FindFirstChild("HumanoidRootPart")
-                local head=char and char:FindFirstChild("Head")
-                local hum=char and char:FindFirstChildOfClass("Humanoid")
-
-                if pair and root and head and hum and hum.Health>0 then
-                    local topPos,topVis=cam:WorldToViewportPoint(head.Position+Vector3.new(0,0.8,0))
-                    local botPos,botVis=cam:WorldToViewportPoint(root.Position-Vector3.new(0,3,0))
-
-                    if topVis and botVis and topPos.Z>0 then
-                        local height=math.abs(botPos.Y-topPos.Y)
-                        local width=math.clamp(height*0.55,10,300)
-                        local centerX=(topPos.X+botPos.X)*0.5
-                        local barX=centerX-width*0.5-6
-                        local topY=math.min(topPos.Y,botPos.Y)
-                        local botY=topY+height
-                        local ratio=math.clamp(hum.Health/math.max(hum.MaxHealth,1),0,1)
-                        local fillTopY=botY-(height*ratio)
-                        local hpColor=Color3.fromHSV(ratio*0.33,0.85,0.95)
-
-                        pcall(function()
-                            pair.bg.From=Vector2.new(barX,topY)
-                            pair.bg.To=Vector2.new(barX,botY)
-                            pair.bg.Visible=true
-
-                            pair.fg.From=Vector2.new(barX,fillTopY)
-                            pair.fg.To=Vector2.new(barX,botY)
-                            pair.fg.Color=hpColor
-                            pair.fg.Visible=true
-                        end)
-                    else
-                        pcall(function() pair.bg.Visible=false pair.fg.Visible=false end)
-                    end
-                elseif pair then
-                    pcall(function() pair.bg.Visible=false pair.fg.Visible=false end)
-                end
-            end
-        end
-    end
-
     local function updateNameEsp()
         if not nameEspOn then
             clearNameEsp()
@@ -3076,24 +3072,18 @@ local function Main()
         setStatus(v and "NAME ESP ON" or "NAME ESP OFF")
     end)
 
-    toggleRow(visualLeft,4,"Health Bars","Live HP bar beside players",nil,function(v)
-        healthBarOn=v
-        if not v then
-            clearHealthBars()
+    local hudToggle=toggleRow(visualRight,1,"FPS & Ping HUD","Top-right draggable counter pill",nil,function(v)
+        hudEnabled=v
+        if hudPill and hudPill.Parent then
+            hudPill.Visible=v
         end
-        setStatus(v and "HEALTH BARS ON" or "HEALTH BARS OFF")
+        setStatus(v and "FPS & PING HUD ON" or "FPS & PING HUD OFF")
     end)
-
-    toggleRow(visualRight,1,"FPS & Ping HUD","Draggable performance counter",nil,function(v)
-        perfHudOn=v
-        hudPill.Visible=v
-        setStatus(v and "PERF HUD ON" or "PERF HUD OFF")
-    end)
+    hudToggle.Set(true,true)
 
     Players.PlayerRemoving:Connect(function(p)
         removeBoxDrawing(p)
         removeTracerDrawing(p)
-        removeHealthBarDrawing(p)
         removeNameGui(p)
     end)
 
@@ -3275,17 +3265,13 @@ local function Main()
 
 
 
-    local antiAfkOn,fullbrightOn,noFogOn=false,false,false
-
-    local origFogEnd=Lighting.FogEnd
+    local antiAfkOn,fullbrightOn=false,false
 
     local fovOn,fovValue=false,70
 
     local hlOn=false
 
     local walkOnWaterOn=false
-
-    local clickTpOn=false
 
     local waterPart=nil
 
@@ -3417,29 +3403,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,3,"No Fog","Clear distance fog without fullbright",nil,function(v)
-
-        noFogOn=v
-
-        if v then
-
-            origFogEnd=Lighting.FogEnd
-
-            Lighting.FogEnd=1000000
-
-        else
-
-            Lighting.FogEnd=origFogEnd
-
-        end
-
-        setStatus(v and "NO FOG ON" or "NO FOG OFF")
-
-    end)
-
-
-
-    toggleRow(miscLeft,4,"Custom FOV",nil,nil,function(v)
+    toggleRow(miscLeft,3,"Custom FOV",nil,nil,function(v)
 
         fovOn=v
 
@@ -3447,7 +3411,7 @@ local function Main()
 
     end)
 
-    sliderRow(miscLeft,5,"FOV Value",30,120,70,"",function(v) fovValue=v end)
+    sliderRow(miscLeft,4,"FOV Value",30,120,70,"",function(v) fovValue=v end)
 
 
 
@@ -3483,7 +3447,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,6,"Player Highlights","Highlight other players",nil,function(v)
+    toggleRow(miscLeft,5,"Player Highlights","Highlight other players",nil,function(v)
 
         hlOn=v
 
@@ -3501,45 +3465,13 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,7,"Walk on Water","Support platform beneath character",nil,function(v)
+    toggleRow(miscLeft,6,"Walk on Water","Support platform beneath character",nil,function(v)
 
         walkOnWaterOn=v
 
         if not v then destroyWaterPart() end
 
         setStatus(v and "WALK ON WATER ON" or "WALK ON WATER OFF")
-
-    end)
-
-
-
-    toggleRow(miscLeft,8,"Click Teleport","Hold Left Ctrl + Click to teleport",nil,function(v)
-
-        clickTpOn=v
-
-        setStatus(v and "CLICK TP ON (CTRL+CLICK)" or "CLICK TP OFF")
-
-    end)
-
-
-
-    UIS.InputBegan:Connect(function(input,processed)
-
-        if processed or not clickTpOn then return end
-
-        if input.UserInputType==Enum.UserInputType.MouseButton1 and UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
-
-            local _,root=getChar()
-
-            if root and mouse and mouse.Hit then
-
-                root.CFrame=CFrame.new(mouse.Hit.Position+Vector3.new(0,3.5,0))
-
-                setStatus("CLICK TELEPORTED")
-
-            end
-
-        end
 
     end)
 
@@ -3764,6 +3696,12 @@ local function Main()
         logo.BackgroundColor3=C.ACCENT
 
         logoGradient.Color=ColorSequence.new(C.ACCENT,Color3.fromRGB(157,116,190))
+
+        if hudDot and hudDot.Parent then
+
+            hudDot.BackgroundColor3=C.ACCENT
+
+        end
 
         setStatus("UPDATED "..key:upper().." COLOUR")
 
@@ -4020,15 +3958,7 @@ local function Main()
 
         antiVoidOn=false
 
-        airDashOn=false
-
-        orbitOn=false
-
-        clickTpOn=false
-
-        noFogOn=false
-
-        perfHudOn=false
+        hudEnabled=false
 
         restoreAntiFlingCollisions()
 
@@ -4042,15 +3972,11 @@ local function Main()
 
         workspace.Gravity=origGravity
 
-        Lighting.FogEnd=origFogEnd
-
         clearHighlights()
 
         clearBoxEsp()
 
         clearTracers()
-
-        clearHealthBars()
 
         clearNameEsp()
 
@@ -4164,14 +4090,6 @@ local function Main()
 
         if processed then return end
 
-        if input.KeyCode==Enum.KeyCode.Q and airDashOn then
-
-            triggerAirDash()
-
-            return
-
-        end
-
         local obj=binds[input.KeyCode]
 
         if obj then obj.Toggle() end
@@ -4204,10 +4122,9 @@ local function Main()
 
 
 
-    local fpsFrames=0
-    local fpsClock=os.clock()
-
     RunService.RenderStepped:Connect(function(dt)
+
+        stepFpsPingHud(dt)
 
         stepWalkOnWater()
 
@@ -4215,26 +4132,9 @@ local function Main()
 
         updateTracers()
 
-        updateHealthBars()
-
         updateNameEsp()
 
         updateFovCircle()
-
-        if perfHudOn then
-            fpsFrames=fpsFrames+1
-            local now=os.clock()
-            if now-fpsClock>=0.4 then
-                local fps=math.floor(fpsFrames/(now-fpsClock)+0.5)
-                fpsFrames=0
-                fpsClock=now
-                local ping=0
-                pcall(function()
-                    ping=math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()+0.5)
-                end)
-                hudLabel.Text=string.format("FPS: %d | PING: %d ms",fps,ping)
-            end
-        end
 
         if aimlockOn then
 
@@ -4270,10 +4170,6 @@ local function Main()
 
             Lighting.OutdoorAmbient=Color3.fromRGB(190,190,190)
 
-        elseif noFogOn then
-
-            Lighting.FogEnd=1000000
-
         end
 
         if fovOn then
@@ -4298,7 +4194,7 @@ local function Main()
 
     print("DISCORD: "..DISCORD_INVITE)
 
-    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP | F = SPIDER FLY | Q = DASH")
+    print("RIGHT SHIFT = MENU | B = SPEED | N = JUMP | J = INF JUMP | F = SPIDER FLY")
 
 end
 
