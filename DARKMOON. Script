@@ -1,7 +1,7 @@
 --[[
 	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
 ]]
--- DARK MOON V 2
+-- DARK MOON V 1.2
 -- By biyxznd
 -- Discord: https://discord.gg/QxRKp9wNeE
 
@@ -45,7 +45,7 @@ local function Main()
 
             game:GetService("StarterGui"):SetCore("SendNotification", {
 
-                Title = "DARK MOON V 2",
+                Title = "DARK MOON V 1.2",
 
                 Text = msg,
 
@@ -59,7 +59,7 @@ local function Main()
 
 
 
-    notify("Loading DARK MOON V 2...")
+    notify("Loading DARK MOON V 1.2...")
 
 
 
@@ -369,7 +369,7 @@ local function Main()
         Size=UDim2.fromOffset(260,14),
         Position=UDim2.fromOffset(120,36),
         BackgroundTransparency=1,
-        Text="V 2 · by biyxznd · "..DISCORD_INVITE,
+        Text="V 1.2 · by biyxznd · "..DISCORD_INVITE,
         Font=Enum.Font.Gotham,
         TextSize=10,
         TextColor3=C.sub,
@@ -579,7 +579,7 @@ local function Main()
                 profileGameLabel.Text=info.Name
             end
             if gameTitleLabel and gameTitleLabel.Parent then
-                gameTitleLabel.Text="V 2 · by biyxznd · "..info.Name
+                gameTitleLabel.Text="V 1.2 · by biyxznd · "..info.Name
             end
         end
     end)
@@ -2454,6 +2454,8 @@ local function Main()
 
                 else
 
+                    -- Keep a soft self-visible ghost alpha on local view while hiding part from others
+
                     desc.Transparency=math.max(invisBackup[desc] or 0,0.65)
 
                 end
@@ -4009,9 +4011,9 @@ local function Main()
 
     setStatus("READY | RIGHT SHIFT: MENU")
 
-    notify("DARK MOON V 2 Loaded!")
+    notify("DARK MOON V 1.2 Loaded!")
 
-    print("DARK MOON V 2 LOADED | BY BIYXZND")
+    print("DARK MOON V 1.2 LOADED | BY BIYXZND")
 
     print("DISCORD: "..DISCORD_INVITE)
 
@@ -4025,7 +4027,7 @@ local ok,err=pcall(Main)
 
 if not ok then
 
-    warn("[DARK MOON V 2] Failed to load: "..tostring(err))
+    warn("[DARK MOON V 1.2] Failed to load: "..tostring(err))
 
     pcall(function()
 
@@ -4059,7 +4061,7 @@ if not ok then
 
         box.Font=Enum.Font.Gotham
 
-        box.Text="DARK MOON V 2 failed to load:\n\n"..tostring(err).."\n\nClick to close"
+        box.Text="DARK MOON V 1.2 failed to load:\n\n"..tostring(err).."\n\nClick to close"
 
         box.Parent=gui
 
