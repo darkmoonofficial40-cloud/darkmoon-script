@@ -6,6 +6,7 @@
 -- Discord: https://discord.gg/QxRKp9wNeE
 
 -- Movement + Teleport + Troll + Visual + Combat + Misc + Settings
+-- Supports general Roblox games, Mic Up hangouts, and Murder Mystery 2 helpers
 
 -- RIGHT SHIFT = Open / Close Menu
 
@@ -2394,6 +2395,8 @@ local function Main()
 
     local invisOn=false
 
+    local ghostAlpha=0.72
+
     local invisBackup={}
 
     local followOn,spectateOn=false,false
@@ -2454,7 +2457,7 @@ local function Main()
 
                 else
 
-                    desc.Transparency=math.max(invisBackup[desc] or 0,0.65)
+                    desc.Transparency=math.clamp(math.max(invisBackup[desc] or 0,ghostAlpha),0,1)
 
                 end
 
@@ -2466,7 +2469,7 @@ local function Main()
 
                 end
 
-                desc.Transparency=math.max(invisBackup[desc] or 0,0.55)
+                desc.Transparency=math.clamp(math.max(invisBackup[desc] or 0,ghostAlpha),0,1)
 
             elseif desc:IsA("BillboardGui") then
 
@@ -2506,7 +2509,7 @@ local function Main()
 
     end)
 
-    toggleRow(trollLeft,5,"Local Ghost View","Client-side ghost alpha on self",nil,function(v)
+    toggleRow(trollLeft,5,"Ghost Self-View","Client-side ghost look (server-dependent)",nil,function(v)
 
         invisOn=v
 
@@ -2514,15 +2517,23 @@ local function Main()
 
             applyInvisibility()
 
-            setStatus("GHOST VIEW ON")
+            setStatus("GHOST SELF-VIEW ON")
 
         else
 
             restoreInvisibility()
 
-            setStatus("GHOST VIEW OFF",C.sub)
+            setStatus("GHOST SELF-VIEW OFF",C.sub)
 
         end
+
+    end)
+
+    sliderRow(trollLeft,6,"Ghost Transparency",20,95,72,"%",function(v)
+
+        ghostAlpha=v/100
+
+        if invisOn then applyInvisibility() end
 
     end)
 
@@ -2748,6 +2759,28 @@ local function Main()
         end
     end
 
+    local function getPlayerRoleTag(p)
+        if not p or not p.Character then return nil end
+        local backpack=p:FindFirstChildOfClass("Backpack")
+        local function hasKeyword(container, kw)
+            if not container then return false end
+            for _,item in ipairs(container:GetChildren()) do
+                local n=item.Name:lower()
+                if n:find(kw,1,true) then
+                    return true
+                end
+            end
+            return false
+        end
+        if hasKeyword(p.Character,"knife") or hasKeyword(backpack,"knife") then
+            return "MURD"
+        end
+        if hasKeyword(p.Character,"gun") or hasKeyword(p.Character,"revolver") or hasKeyword(backpack,"gun") or hasKeyword(backpack,"revolver") then
+            return "SHER"
+        end
+        return nil
+    end
+
     local function updateBoxEsp()
         if not boxEspOn then
             for _,sq in pairs(boxEspDrawings) do
@@ -2779,11 +2812,13 @@ local function Main()
                         local height=math.abs(botPos.Y-topPos.Y)
                         local width=math.clamp(height*0.55,10,300)
                         local centerX=(topPos.X+botPos.X)*0.5
+                        local roleTag=getPlayerRoleTag(p)
+                        local boxCol=roleTag=="MURD" and C.bad or (roleTag=="SHER" and C.good or C.ACCENT)
 
                         pcall(function()
                             sq.Size=Vector2.new(width,height)
                             sq.Position=Vector2.new(centerX-width*0.5,math.min(topPos.Y,botPos.Y))
-                            sq.Color=C.ACCENT
+                            sq.Color=boxCol
                             sq.Visible=true
                         end)
                     else
@@ -2856,7 +2891,7 @@ local function Main()
                         local bbg=make("BillboardGui",{
                             Name="DarkMoonNameTag",
                             Adornee=head,
-                            Size=UDim2.fromOffset(140,22),
+                            Size=UDim2.fromOffset(160,22),
                             StudsOffset=Vector3.new(0,2.2,0),
                             AlwaysOnTop=true
                         },parent)
@@ -2873,8 +2908,14 @@ local function Main()
                         nameGuis[p]=entry
                     end
                     local dist=myRoot and math.floor((root.Position-myRoot.Position).Magnitude+0.5) or 0
-                    entry.label.Text=string.format("%s [%dm]",p.Name,dist)
-                    entry.label.TextColor3=C.ACCENT
+                    local roleTag=getPlayerRoleTag(p)
+                    if roleTag then
+                        entry.label.Text=string.format("[%s] %s [%dm]",roleTag,p.Name,dist)
+                        entry.label.TextColor3=roleTag=="MURD" and C.bad or C.good
+                    else
+                        entry.label.Text=string.format("%s [%dm]",p.Name,dist)
+                        entry.label.TextColor3=C.ACCENT
+                    end
                 else
                     removeNameGui(p)
                 end
@@ -2882,7 +2923,7 @@ local function Main()
         end
     end
 
-    toggleRow(visualLeft,1,"ESP","2D bounding box around players",nil,function(v)
+    toggleRow(visualLeft,1,"ESP","2D box + MM2 role color",nil,function(v)
         boxEspOn=v
         if not v then
             clearBoxEsp()
@@ -2898,7 +2939,7 @@ local function Main()
         setStatus(v and "TRACERS ON" or "TRACERS OFF")
     end)
 
-    toggleRow(visualLeft,3,"Name ESP","Show player name and distance",nil,function(v)
+    toggleRow(visualLeft,3,"Name ESP","Name, distance & MM2 role tag",nil,function(v)
         nameEspOn=v
         if not v then
             clearNameEsp()
@@ -3084,7 +3125,7 @@ local function Main()
 
     local miscTab=newTab("Misc",6)
 
-    local miscLeft=column(miscTab,0,0.5,"Utilities")
+    local miscLeft=column(miscTab,0,0.5,"Utilities & Modes")
 
     local miscRight=column(miscTab,0.5,0.5,"Actions")
 
@@ -3164,7 +3205,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,1,"Anti-AFK","Prevent idle kick where supported",nil,function(v)
+    toggleRow(miscLeft,1,"Anti-AFK","Great for Mic Up & hangouts",nil,function(v)
 
         antiAfkOn=v
 
@@ -3246,9 +3287,13 @@ local function Main()
 
         if highlights[p] then highlights[p]:Destroy() end
 
+        local roleTag=getPlayerRoleTag(p)
+
+        local fillCol=roleTag=="MURD" and C.bad or (roleTag=="SHER" and C.good or C.ACCENT)
+
         highlights[p]=make("Highlight",{
 
-            FillColor=C.ACCENT,
+            FillColor=fillCol,
 
             FillTransparency=0.6,
 
@@ -3272,7 +3317,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,5,"Player Highlights","Highlight other players",nil,function(v)
+    toggleRow(miscLeft,5,"Player Highlights","Highlight players & MM2 roles",nil,function(v)
 
         hlOn=v
 
@@ -3314,7 +3359,61 @@ local function Main()
 
 
 
-    buttonRow(miscRight,1,"COPY MY POSITION",C.row,function()
+    buttonRow(miscRight,1,"MM2: TP TO DROPPED GUN",C.row,function()
+
+        local _,root=getChar()
+
+        if not root then return end
+
+        local gunPart=workspace:FindFirstChild("GunDrop",true)
+
+        if gunPart and gunPart:IsA("BasePart") then
+
+            root.CFrame=gunPart.CFrame+Vector3.new(0,2.5,0)
+
+            setStatus("TELEPORTED TO GUN DROP")
+
+        else
+
+            setStatus("NO GUN DROP FOUND",C.sub)
+
+        end
+
+    end)
+
+
+
+    buttonRow(miscRight,2,"MIC UP: FIX CAMERA & UNSTUCK",C.row,function()
+
+        local _,root,hum=getChar()
+
+        local cam=workspace.CurrentCamera
+
+        if cam and hum then
+
+            cam.CameraType=Enum.CameraType.Custom
+
+            cam.CameraSubject=hum
+
+        end
+
+        if root then
+
+            root.AssemblyLinearVelocity=Vector3.zero
+
+            root.AssemblyAngularVelocity=Vector3.zero
+
+            root.CFrame=root.CFrame+Vector3.new(0,4,0)
+
+        end
+
+        setStatus("CAMERA & POSITION RESET")
+
+    end)
+
+
+
+    buttonRow(miscRight,3,"COPY MY POSITION",C.row,function()
 
         local _,root=getChar()
 
@@ -3342,7 +3441,7 @@ local function Main()
 
 
 
-    buttonRow(miscRight,2,"RESET CHARACTER",C.row,function()
+    buttonRow(miscRight,4,"RESET CHARACTER",C.row,function()
 
         local _,_,hum=getChar()
 
@@ -3358,7 +3457,7 @@ local function Main()
 
 
 
-    buttonRow(miscRight,3,"REJOIN SERVER",C.row,function()
+    buttonRow(miscRight,5,"REJOIN SERVER",C.row,function()
 
         setStatus("REJOINING...",C.sub)
 
@@ -3372,7 +3471,7 @@ local function Main()
 
 
 
-    buttonRow(miscRight,4,"SERVER HOP",C.row,function()
+    buttonRow(miscRight,6,"SERVER HOP",C.row,function()
 
         setStatus("FINDING SERVER...",C.sub)
 
@@ -3414,7 +3513,7 @@ local function Main()
 
 
 
-    buttonRow(miscRight,5,"COPY DISCORD INVITE",C.row,function()
+    buttonRow(miscRight,7,"COPY DISCORD INVITE",C.row,function()
 
         if setclipboard then
 
