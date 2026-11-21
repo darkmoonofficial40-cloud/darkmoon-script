@@ -2392,9 +2392,99 @@ local function Main()
 
     local origGravity=workspace.Gravity
 
+    local invisOn=false
+
+    local invisBackup={}
+
     local followOn,spectateOn=false,false
 
     local followTimer=0
+
+
+
+    local function restoreInvisibility()
+
+        for obj,origVal in pairs(invisBackup) do
+
+            if obj and obj.Parent then
+
+                pcall(function()
+
+                    if obj:IsA("BasePart") or obj:IsA("Decal") or obj:IsA("Texture") then
+
+                        obj.Transparency=origVal
+
+                    elseif obj:IsA("BillboardGui") then
+
+                        obj.Enabled=origVal
+
+                    end
+
+                end)
+
+            end
+
+        end
+
+        invisBackup={}
+
+    end
+
+
+
+    local function applyInvisibility()
+
+        local char=player.Character
+
+        if not char then return end
+
+        for _,desc in ipairs(char:GetDescendants()) do
+
+            if desc:IsA("BasePart") then
+
+                if invisBackup[desc]==nil then
+
+                    invisBackup[desc]=desc.Transparency
+
+                end
+
+                if desc.Name=="HumanoidRootPart" then
+
+                    desc.Transparency=1
+
+                else
+
+                    -- Keep a soft self-visible ghost alpha on local view while hiding part from others
+
+                    desc.Transparency=math.max(invisBackup[desc] or 0,0.65)
+
+                end
+
+            elseif desc:IsA("Decal") or desc:IsA("Texture") then
+
+                if invisBackup[desc]==nil then
+
+                    invisBackup[desc]=desc.Transparency
+
+                end
+
+                desc.Transparency=math.max(invisBackup[desc] or 0,0.55)
+
+            elseif desc:IsA("BillboardGui") then
+
+                if invisBackup[desc]==nil then
+
+                    invisBackup[desc]=desc.Enabled
+
+                end
+
+                desc.Enabled=true
+
+            end
+
+        end
+
+    end
 
 
 
@@ -2415,6 +2505,26 @@ local function Main()
         gravValue=v
 
         if lowGravOn then workspace.Gravity=v end
+
+    end)
+
+    toggleRow(trollLeft,5,"Invisibility","Ghost self-view while hidden",nil,function(v)
+
+        invisOn=v
+
+        if v then
+
+            applyInvisibility()
+
+            setStatus("INVISIBILITY ON")
+
+        else
+
+            restoreInvisibility()
+
+            setStatus("INVISIBILITY OFF",C.sub)
+
+        end
 
     end)
 
@@ -2497,6 +2607,12 @@ local function Main()
     RunService.Heartbeat:Connect(function(dt)
 
         targetLabel.Text=selectedPlayer and ("Target: "..selectedPlayer.Name) or "No player selected (use Teleport tab)"
+
+        if invisOn then
+
+            applyInvisibility()
+
+        end
 
         local _,root,hum=getChar()
 
@@ -3659,6 +3775,10 @@ local function Main()
 
         stopFly()
 
+        invisOn=false
+
+        restoreInvisibility()
+
         antiFlingOn=false
 
         antiVoidOn=false
@@ -3802,6 +3922,8 @@ local function Main()
 
 
     player.CharacterAdded:Connect(function()
+
+        invisBackup={}
 
         antiFlingCache={}
 
