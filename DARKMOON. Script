@@ -2396,13 +2396,113 @@ local function Main()
 
     local invisBackup={}
 
+    local ghostModel=nil
+
+    local ghostParts={}
+
+    local jerkOn=false
+
+    local jerkPhase=0
+
+    local jerkJoint=nil
+
+    local jerkOrigC0=nil
+
     local followOn,spectateOn=false,false
 
     local followTimer=0
 
 
 
+    local function clearGhostPreview()
+
+        ghostParts={}
+
+        if ghostModel then
+
+            pcall(function() ghostModel:Destroy() end)
+
+            ghostModel=nil
+
+        end
+
+    end
+
+
+
+    local function ensureGhostPreview(char)
+
+        if not char or not char.Parent then
+
+            clearGhostPreview()
+
+            return
+
+        end
+
+        if not ghostModel or not ghostModel.Parent then
+
+            ghostModel=make("Model",{Name="DarkMoonLocalGhost"},workspace.CurrentCamera or workspace)
+
+            ghostParts={}
+
+            for _,desc in ipairs(char:GetDescendants()) do
+
+                if desc:IsA("BasePart") and desc.Name~="HumanoidRootPart" then
+
+                    local gp=make("Part",{
+
+                        Name="Ghost_"..desc.Name,
+
+                        Size=desc.Size,
+
+                        CFrame=desc.CFrame,
+
+                        Anchored=true,
+
+                        CanCollide=false,
+
+                        CanTouch=false,
+
+                        CanQuery=false,
+
+                        CastShadow=false,
+
+                        Material=Enum.Material.ForceField,
+
+                        Color=C.ACCENT,
+
+                        Transparency=0.65
+
+                    },ghostModel)
+
+                    ghostParts[desc]=gp
+
+                end
+
+            end
+
+        end
+
+        for srcPart,gp in pairs(ghostParts) do
+
+            if srcPart and srcPart.Parent and gp and gp.Parent then
+
+                gp.Size=srcPart.Size
+
+                gp.CFrame=srcPart.CFrame
+
+            end
+
+        end
+
+    end
+
+
+
     local function restoreInvisibility()
+
+        clearGhostPreview()
 
         for obj,origVal in pairs(invisBackup) do
 
@@ -2414,7 +2514,7 @@ local function Main()
 
                         obj.Transparency=origVal
 
-                    elseif obj:IsA("BillboardGui") then
+                    elseif obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") then
 
                         obj.Enabled=origVal
 
@@ -2448,17 +2548,7 @@ local function Main()
 
                 end
 
-                if desc.Name=="HumanoidRootPart" then
-
-                    desc.Transparency=1
-
-                else
-
-                    -- Keep a soft self-visible ghost alpha on local view while hiding part from others
-
-                    desc.Transparency=math.max(invisBackup[desc] or 0,0.65)
-
-                end
+                desc.Transparency=1
 
             elseif desc:IsA("Decal") or desc:IsA("Texture") then
 
@@ -2468,9 +2558,9 @@ local function Main()
 
                 end
 
-                desc.Transparency=math.max(invisBackup[desc] or 0,0.55)
+                desc.Transparency=1
 
-            elseif desc:IsA("BillboardGui") then
+            elseif desc:IsA("BillboardGui") or desc:IsA("SurfaceGui") then
 
                 if invisBackup[desc]==nil then
 
@@ -2478,9 +2568,67 @@ local function Main()
 
                 end
 
-                desc.Enabled=true
+                desc.Enabled=false
 
             end
+
+        end
+
+        ensureGhostPreview(char)
+
+    end
+
+
+
+    local function stopJerk()
+
+        jerkOn=false
+
+        jerkPhase=0
+
+        if jerkJoint and jerkJoint.Parent and jerkOrigC0 then
+
+            pcall(function()
+
+                jerkJoint.C0=jerkOrigC0
+
+            end)
+
+        end
+
+        jerkJoint=nil
+
+        jerkOrigC0=nil
+
+    end
+
+
+
+    local function stepJerk(dt)
+
+        if not jerkOn then return end
+
+        local char=player.Character
+
+        if not char then return end
+
+        if not jerkJoint or not jerkJoint.Parent then
+
+            jerkJoint=findJoint(char,{"Waist","RootJoint","Root"})
+
+            jerkOrigC0=jerkJoint and jerkJoint.C0 or nil
+
+        end
+
+        if jerkJoint and jerkJoint.Parent and jerkOrigC0 then
+
+            jerkPhase=jerkPhase+(dt or 0.016)*11
+
+            local thrust=math.sin(jerkPhase)*0.32
+
+            local tilt=math.sin(jerkPhase)*0.22
+
+            jerkJoint.C0=jerkOrigC0*CFrame.new(0,0,thrust)*CFrame.Angles(tilt,0,0)
 
         end
 
@@ -2508,7 +2656,7 @@ local function Main()
 
     end)
 
-    toggleRow(trollLeft,5,"Invisibility","Ghost self-view while hidden",nil,function(v)
+    toggleRow(trollLeft,5,"Invisibility","Hidden limbs + local ghost view",nil,function(v)
 
         invisOn=v
 
@@ -2523,6 +2671,26 @@ local function Main()
             restoreInvisibility()
 
             setStatus("INVISIBILITY OFF",C.sub)
+
+        end
+
+    end)
+
+    toggleRow(trollLeft,6,"Jerk","Rhythmic character thrust motion",nil,function(v)
+
+        if v then
+
+            jerkOn=true
+
+            jerkPhase=0
+
+            setStatus("JERK ON")
+
+        else
+
+            stopJerk()
+
+            setStatus("JERK OFF",C.sub)
 
         end
 
@@ -2613,6 +2781,8 @@ local function Main()
             applyInvisibility()
 
         end
+
+        stepJerk(dt)
 
         local _,root,hum=getChar()
 
@@ -3094,6 +3264,8 @@ local function Main()
 
     local antiAfkOn,fullbrightOn=false,false
 
+    local antiCheatShieldOn=false
+
     local fovOn,fovValue=false,70
 
     local hlOn=false
@@ -3105,6 +3277,48 @@ local function Main()
     local highlights={}
 
     local lightingBackup={}
+
+    local shieldHookInstalled=false
+
+    local oldNamecall=nil
+
+
+
+    local function installAntiCheatShield()
+
+        if shieldHookInstalled or not hookmetamethod or not getnamecallmethod then return end
+
+        local ok=pcall(function()
+
+            oldNamecall=hookmetamethod(game,"__namecall",function(self,...)
+
+                if antiCheatShieldOn then
+
+                    local method=getnamecallmethod()
+
+                    if method=="Kick" or method=="kick" then
+
+                        if self==player then
+
+                            return nil
+
+                        end
+
+                    end
+
+                end
+
+                return oldNamecall(self,...)
+
+            end)
+
+            shieldHookInstalled=true
+
+        end)
+
+        if not ok then shieldHookInstalled=false end
+
+    end
 
 
 
@@ -3174,6 +3388,26 @@ local function Main()
 
 
 
+    toggleRow(miscLeft,2,"Anti-Cheat Shield","Block client kick calls where supported",nil,function(v)
+
+        antiCheatShieldOn=v
+
+        if v then
+
+            installAntiCheatShield()
+
+            setStatus("ANTI-CHEAT SHIELD ON")
+
+        else
+
+            setStatus("ANTI-CHEAT SHIELD OFF",C.sub)
+
+        end
+
+    end)
+
+
+
     player.Idled:Connect(function()
 
         if antiAfkOn then
@@ -3194,7 +3428,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,2,"Fullbright","Light up dark areas",nil,function(v)
+    toggleRow(miscLeft,3,"Fullbright","Light up dark areas",nil,function(v)
 
         fullbrightOn=v
 
@@ -3230,7 +3464,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,3,"Custom FOV",nil,nil,function(v)
+    toggleRow(miscLeft,4,"Custom FOV",nil,nil,function(v)
 
         fovOn=v
 
@@ -3238,7 +3472,7 @@ local function Main()
 
     end)
 
-    sliderRow(miscLeft,4,"FOV Value",30,120,70,"",function(v) fovValue=v end)
+    sliderRow(miscLeft,5,"FOV Value",30,120,70,"",function(v) fovValue=v end)
 
 
 
@@ -3274,7 +3508,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,5,"Player Highlights","Highlight other players",nil,function(v)
+    toggleRow(miscLeft,6,"Player Highlights","Highlight other players",nil,function(v)
 
         hlOn=v
 
@@ -3292,7 +3526,7 @@ local function Main()
 
 
 
-    toggleRow(miscLeft,6,"Walk on Water","Support platform beneath character",nil,function(v)
+    toggleRow(miscLeft,7,"Walk on Water","Support platform beneath character",nil,function(v)
 
         walkOnWaterOn=v
 
@@ -3775,7 +4009,11 @@ local function Main()
 
         stopFly()
 
+        stopJerk()
+
         invisOn=false
+
+        antiCheatShieldOn=false
 
         restoreInvisibility()
 
@@ -3924,6 +4162,12 @@ local function Main()
     player.CharacterAdded:Connect(function()
 
         invisBackup={}
+
+        clearGhostPreview()
+
+        jerkJoint=nil
+
+        jerkOrigC0=nil
 
         antiFlingCache={}
 
