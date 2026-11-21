@@ -2454,6 +2454,8 @@ local function Main()
 
                 else
 
+                    -- Keep a soft self-visible ghost alpha on local view while hiding part from others
+
                     desc.Transparency=math.max(invisBackup[desc] or 0,0.65)
 
                 end
@@ -2677,11 +2679,9 @@ local function Main()
     local boxEspOn=false
     local tracersOn=false
     local nameEspOn=false
-    local name3dGolOn=false
     local boxEspDrawings={}
     local tracerDrawings={}
     local nameGuis={}
-    local name3dGolGuis={}
 
     local function createBoxDrawing()
         if not Drawing or not Drawing.new then return nil end
@@ -2732,14 +2732,6 @@ local function Main()
         end
     end
 
-    local function remove3dNameGolGui(p)
-        local g=name3dGolGuis[p]
-        if g then
-            pcall(function() g:Destroy() end)
-            name3dGolGuis[p]=nil
-        end
-    end
-
     local function clearBoxEsp()
         for p,_ in pairs(boxEspDrawings) do
             removeBoxDrawing(p)
@@ -2755,12 +2747,6 @@ local function Main()
     local function clearNameEsp()
         for p,_ in pairs(nameGuis) do
             removeNameGui(p)
-        end
-    end
-
-    local function clear3dNameGol()
-        for p,_ in pairs(name3dGolGuis) do
-            remove3dNameGolGui(p)
         end
     end
 
@@ -2898,72 +2884,6 @@ local function Main()
         end
     end
 
-    local function update3dNameGol()
-        if not name3dGolOn then
-            clear3dNameGol()
-            return
-        end
-
-        local _,myRoot=getChar()
-        for _,p in ipairs(Players:GetPlayers()) do
-            if p~=player then
-                local char=p.Character
-                local head=char and char:FindFirstChild("Head")
-                local root=char and char:FindFirstChild("HumanoidRootPart")
-                if head and root then
-                    local entry=name3dGolGuis[p]
-                    if not entry or not entry.gui or not entry.gui.Parent or entry.gui.Adornee~=head then
-                        remove3dNameGolGui(p)
-                        local bbg=make("BillboardGui",{
-                            Name="DarkMoon3DNameGol",
-                            Adornee=head,
-                            Size=UDim2.fromOffset(128,34),
-                            StudsOffset=Vector3.new(0,3.4,0),
-                            AlwaysOnTop=true
-                        },parent)
-
-                        local golCircle=make("Frame",{
-                            Name="GolBadge",
-                            Size=UDim2.fromScale(1,1),
-                            BackgroundColor3=C.bg,
-                            BackgroundTransparency=0.12,
-                            BorderSizePixel=0
-                        },bbg)
-                        corner(golCircle,17)
-                        local ring=make("UIStroke",{
-                            Color=C.ACCENT,
-                            Thickness=1.6
-                        },golCircle)
-
-                        local lbl=make("TextLabel",{
-                            Name="GolNameLabel",
-                            Size=UDim2.new(1,-10,1,0),
-                            Position=UDim2.fromOffset(5,0),
-                            BackgroundTransparency=1,
-                            Text=p.Name,
-                            Font=Enum.Font.GothamBold,
-                            TextSize=11,
-                            TextColor3=C.text,
-                            TextStrokeTransparency=0.25,
-                            TextTruncate=Enum.TextTruncate.AtEnd
-                        },golCircle)
-
-                        entry={gui=bbg,circle=golCircle,ring=ring,label=lbl}
-                        name3dGolGuis[p]=entry
-                    end
-
-                    local dist=myRoot and math.floor((root.Position-myRoot.Position).Magnitude+0.5) or 0
-                    entry.circle.BackgroundColor3=C.bg
-                    entry.ring.Color=C.ACCENT
-                    entry.label.Text=string.format("%s (%dm)",p.Name,dist)
-                    entry.label.TextColor3=C.text
-                else
-                    remove3dNameGolGui(p)
-                end
-            end
-        end
-    end
-
     toggleRow(visualLeft,1,"ESP","2D bounding box around players",nil,function(v)
         boxEspOn=v
         if not v then
@@ -2988,19 +2908,10 @@ local function Main()
         setStatus(v and "NAME ESP ON" or "NAME ESP OFF")
     end)
 
-    toggleRow(visualLeft,4,"3D Name (Gol)","Round 3D name badge over players",nil,function(v)
-        name3dGolOn=v
-        if not v then
-            clear3dNameGol()
-        end
-        setStatus(v and "3D NAME GOL ON" or "3D NAME GOL OFF")
-    end)
-
     Players.PlayerRemoving:Connect(function(p)
         removeBoxDrawing(p)
         removeTracerDrawing(p)
         removeNameGui(p)
-        remove3dNameGolGui(p)
     end)
 
 
@@ -3892,8 +3803,6 @@ local function Main()
 
         clearNameEsp()
 
-        clear3dNameGol()
-
         clearFovCircle()
 
         gui:Destroy()
@@ -4047,8 +3956,6 @@ local function Main()
         updateTracers()
 
         updateNameEsp()
-
-        update3dNameGol()
 
         updateFovCircle()
 
