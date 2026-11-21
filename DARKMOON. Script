@@ -5,7 +5,7 @@
 -- By biyxznd
 -- Discord: https://discord.gg/QxRKp9wNeE
 
--- Movement + Teleport + Troll + Visual + Combat + MM2 + Misc + Settings
+-- Movement + Teleport + Troll + Visual + Combat + Misc + Settings
 
 -- RIGHT SHIFT = Open / Close Menu
 
@@ -630,7 +630,7 @@ local function Main()
 
     local pages,tabs={},{}
 
-    local tabIcons={Movement="M",Teleport="TP",Troll="TR",Visual="V",Combat="CB",MM2="MM",Misc="MX",Settings="S"}
+    local tabIcons={Movement="M",Teleport="TP",Troll="TR",Visual="V",Combat="CB",Misc="MX",Settings="S"}
 
     local activePage="Movement"
     local searchableRows={}
@@ -2664,231 +2664,78 @@ local function Main()
 
 
 
-    -- MM2*
-
-    local mm2RoleEspOn=false
-
-    local mm2AutoCoinOn=false
-
-    local mm2CoinTimer=0
-
-
-
-    local function getPlayerRole(p)
-
-        if not p then return "Innocent" end
-
-        local sources={}
-
-        if p.Character then table.insert(sources,p.Character) end
-
-        local bp=p:FindFirstChildOfClass("Backpack")
-
-        if bp then table.insert(sources,bp) end
-
-
-
-        for _,src in ipairs(sources) do
-
-            for _,item in ipairs(src:GetChildren()) do
-
-                if item:IsA("Tool") then
-
-                    local lower=item.Name:lower()
-
-                    if lower:find("knife",1,true) or lower:find("murder",1,true) then
-
-                        return "Murderer"
-
-                    end
-
-                    if lower:find("gun",1,true) or lower:find("revolver",1,true) or lower:find("sheriff",1,true) then
-
-                        return "Sheriff"
-
-                    end
-
-                end
-
-            end
-
-        end
-
-
-
-        local pGui=p:FindFirstChildOfClass("PlayerGui")
-
-        if pGui then
-
-            for _,desc in ipairs(pGui:GetDescendants()) do
-
-                if desc:IsA("TextLabel") or desc:IsA("TextButton") then
-
-                    local t=desc.Text and desc.Text:lower() or ""
-
-                    if t=="murderer" then return "Murderer" end
-
-                    if t=="sheriff" then return "Sheriff" end
-
-                end
-
-            end
-
-        end
-
-
-
-        return "Innocent"
-
-    end
-
-
-
-    local function getRoleColor(role)
-
-        if role=="Murderer" then
-
-            return Color3.fromRGB(245,75,95)
-
-        elseif role=="Sheriff" then
-
-            return Color3.fromRGB(80,175,255)
-
-        end
-
-        return Color3.fromRGB(100,240,180)
-
-    end
-
-
-
-    local function findRolePlayer(targetRole)
-
-        for _,p in ipairs(Players:GetPlayers()) do
-
-            if p~=player and getPlayerRole(p)==targetRole then
-
-                return p
-
-            end
-
-        end
-
-        return nil
-
-    end
-
-
-
-    local function findDroppedGunPart()
-
-        for _,obj in ipairs(workspace:GetDescendants()) do
-
-            if obj:IsA("BasePart") then
-
-                local n=obj.Name:lower()
-
-                if n=="gun" or n=="gunhandle" or n=="droppedgun" or (n:find("gun",1,true) and not obj:IsDescendantOf(player)) then
-
-                    local parentModel=obj:FindFirstAncestorOfClass("Model")
-
-                    local isPlayerChar=false
-
-                    if parentModel then
-
-                        for _,p in ipairs(Players:GetPlayers()) do
-
-                            if p.Character==parentModel then
-
-                                isPlayerChar=true
-
-                                break
-
-                            end
-
-                        end
-
-                    end
-
-                    if not isPlayerChar then
-
-                        return obj
-
-                    end
-
-                end
-
-            end
-
-        end
-
-        return nil
-
-    end
-
-
-
-    local function findNearestCoinPart(rootPos)
-
-        local bestPart=nil
-
-        local bestDist=math.huge
-
-        for _,obj in ipairs(workspace:GetDescendants()) do
-
-            if obj:IsA("BasePart") then
-
-                local n=obj.Name:lower()
-
-                if n=="coin" or n=="coin_server" or n:find("coin",1,true) then
-
-                    local d=(obj.Position-rootPos).Magnitude
-
-                    if d<bestDist then
-
-                        bestDist=d
-
-                        bestPart=obj
-
-                    end
-
-                end
-
-            end
-
-        end
-
-        return bestPart
-
-    end
-
-
-
     -- VISUAL*
 
     local visualTab=newTab("Visual",4)
 
-    local visualLeft=column(visualTab,0,0.5,"Visuals")
+    local visualLeft=column(visualTab,0,0.5,"Visuals & MM2 ESP")
 
     local visualRight=column(visualTab,0.5,0.5,"Options")
 
 
 
     local boxEspOn=false
+    local mm2BoxEspOn=false
+    local mm2RoleLabelsOn=true
     local tracersOn=false
     local nameEspOn=false
     local boxEspDrawings={}
+    local mm2BoxDrawings={}
+    local mm2RoleGuis={}
     local tracerDrawings={}
     local nameGuis={}
 
-    local function createBoxDrawing()
+    local ROLE_COLORS={
+        Murderer=Color3.fromRGB(240,65,85),
+        Sheriff=Color3.fromRGB(65,155,255),
+        Innocent=Color3.fromRGB(100,240,140)
+    }
+
+    local function getMm2Role(p)
+        local roleAttr=p:GetAttribute("Role") or (p.Character and p.Character:GetAttribute("Role"))
+        if type(roleAttr)=="string" then
+            local low=roleAttr:lower()
+            if low:find("murd",1,true) then return "Murderer" end
+            if low:find("sher",1,true) or low:find("hero",1,true) then return "Sheriff" end
+            if low:find("inno",1,true) then return "Innocent" end
+        end
+
+        local containers={}
+        if p.Character then table.insert(containers,p.Character) end
+        local bp=p:FindFirstChildOfClass("Backpack")
+        if bp then table.insert(containers,bp) end
+        local sg=p:FindFirstChildOfClass("StarterGear")
+        if sg then table.insert(containers,sg) end
+
+        local hasKnife=false
+        local hasGun=false
+
+        for _,cont in ipairs(containers) do
+            for _,item in ipairs(cont:GetChildren()) do
+                if item:IsA("Tool") or item:IsA("HopperBin") then
+                    local n=item.Name:lower()
+                    if n=="knife" or n:find("knife",1,true) or n:find("blade",1,true) or n:find("murd",1,true) then
+                        hasKnife=true
+                    elseif n=="gun" or n:find("gun",1,true) or n:find("revolver",1,true) or n:find("pistol",1,true) or n:find("sher",1,true) then
+                        hasGun=true
+                    end
+                end
+            end
+        end
+
+        if hasKnife then return "Murderer" end
+        if hasGun then return "Sheriff" end
+        return "Innocent"
+    end
+
+    local function createBoxDrawing(color)
         if not Drawing or not Drawing.new then return nil end
         local ok,box=pcall(function()
             local sq=Drawing.new("Square")
             sq.Visible=false
-            sq.Thickness=1.5
+            sq.Thickness=1.6
             sq.Filled=false
-            sq.Color=C.ACCENT
+            sq.Color=color or C.ACCENT
             return sq
         end)
         return ok and box or nil
@@ -2914,6 +2761,19 @@ local function Main()
         end
     end
 
+    local function removeMm2BoxDrawing(p)
+        local sq=mm2BoxDrawings[p]
+        if sq then
+            pcall(function() sq:Remove() end)
+            mm2BoxDrawings[p]=nil
+        end
+        local g=mm2RoleGuis[p]
+        if g then
+            pcall(function() g:Destroy() end)
+            mm2RoleGuis[p]=nil
+        end
+    end
+
     local function removeTracerDrawing(p)
         local ln=tracerDrawings[p]
         if ln then
@@ -2933,6 +2793,15 @@ local function Main()
     local function clearBoxEsp()
         for p,_ in pairs(boxEspDrawings) do
             removeBoxDrawing(p)
+        end
+    end
+
+    local function clearMm2BoxEsp()
+        for p,_ in pairs(mm2BoxDrawings) do
+            removeMm2BoxDrawing(p)
+        end
+        for p,_ in pairs(mm2RoleGuis) do
+            removeMm2BoxDrawing(p)
         end
     end
 
@@ -2963,7 +2832,7 @@ local function Main()
             if p~=player then
                 local sq=boxEspDrawings[p]
                 if not sq then
-                    sq=createBoxDrawing()
+                    sq=createBoxDrawing(C.ACCENT)
                     if sq then boxEspDrawings[p]=sq end
                 end
 
@@ -2979,12 +2848,11 @@ local function Main()
                         local height=math.abs(botPos.Y-topPos.Y)
                         local width=math.clamp(height*0.55,10,300)
                         local centerX=(topPos.X+botPos.X)*0.5
-                        local col=mm2RoleEspOn and getRoleColor(getPlayerRole(p)) or C.ACCENT
 
                         pcall(function()
                             sq.Size=Vector2.new(width,height)
                             sq.Position=Vector2.new(centerX-width*0.5,math.min(topPos.Y,botPos.Y))
-                            sq.Color=col
+                            sq.Color=C.ACCENT
                             sq.Visible=true
                         end)
                     else
@@ -2992,6 +2860,93 @@ local function Main()
                     end
                 elseif sq then
                     pcall(function() sq.Visible=false end)
+                end
+            end
+        end
+    end
+
+    local function updateMm2BoxEsp()
+        if not mm2BoxEspOn then
+            for _,sq in pairs(mm2BoxDrawings) do
+                pcall(function() sq.Visible=false end)
+            end
+            for _,g in pairs(mm2RoleGuis) do
+                pcall(function() g.Enabled=false end)
+            end
+            return
+        end
+
+        local cam=workspace.CurrentCamera
+        if not cam then return end
+
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p~=player then
+                local role=getMm2Role(p)
+                local roleColor=ROLE_COLORS[role] or ROLE_COLORS.Innocent
+
+                local sq=mm2BoxDrawings[p]
+                if not sq then
+                    sq=createBoxDrawing(roleColor)
+                    if sq then mm2BoxDrawings[p]=sq end
+                end
+
+                local char=p.Character
+                local root=char and char:FindFirstChild("HumanoidRootPart")
+                local head=char and char:FindFirstChild("Head")
+
+                if sq and root and head then
+                    local topPos,topVis=cam:WorldToViewportPoint(head.Position+Vector3.new(0,0.8,0))
+                    local botPos,botVis=cam:WorldToViewportPoint(root.Position-Vector3.new(0,3,0))
+
+                    if topVis and botVis and topPos.Z>0 then
+                        local height=math.abs(botPos.Y-topPos.Y)
+                        local width=math.clamp(height*0.55,10,300)
+                        local centerX=(topPos.X+botPos.X)*0.5
+
+                        pcall(function()
+                            sq.Size=Vector2.new(width,height)
+                            sq.Position=Vector2.new(centerX-width*0.5,math.min(topPos.Y,botPos.Y))
+                            sq.Color=roleColor
+                            sq.Visible=true
+                        end)
+                    else
+                        pcall(function() sq.Visible=false end)
+                    end
+                elseif sq then
+                    pcall(function() sq.Visible=false end)
+                end
+
+                if mm2RoleLabelsOn and head and root then
+                    local entry=mm2RoleGuis[p]
+                    if not entry or not entry.gui or not entry.gui.Parent or entry.gui.Adornee~=head then
+                        if entry and entry.gui then pcall(function() entry.gui:Destroy() end) end
+                        local bbg=make("BillboardGui",{
+                            Name="DarkMoonMm2RoleTag",
+                            Adornee=head,
+                            Size=UDim2.fromOffset(170,22),
+                            StudsOffset=Vector3.new(0,2.4,0),
+                            AlwaysOnTop=true
+                        },parent)
+                        local lbl=make("TextLabel",{
+                            Size=UDim2.fromScale(1,1),
+                            BackgroundTransparency=1,
+                            Text=p.Name,
+                            Font=Enum.Font.GothamBold,
+                            TextSize=11,
+                            TextColor3=roleColor,
+                            TextStrokeTransparency=0.3
+                        },bbg)
+                        entry={gui=bbg,label=lbl}
+                        mm2RoleGuis[p]=entry
+                    end
+                    entry.gui.Enabled=true
+                    entry.label.Text=string.format("%s [%s]",p.Name,role)
+                    entry.label.TextColor3=roleColor
+                else
+                    local entry=mm2RoleGuis[p]
+                    if entry and entry.gui then
+                        entry.gui.Enabled=false
+                    end
                 end
             end
         end
@@ -3022,11 +2977,10 @@ local function Main()
                 if ln and root then
                     local pos,vis=cam:WorldToViewportPoint(root.Position)
                     if vis and pos.Z>0 then
-                        local col=mm2RoleEspOn and getRoleColor(getPlayerRole(p)) or C.ACCENT
                         pcall(function()
                             ln.From=origin
                             ln.To=Vector2.new(pos.X,pos.Y)
-                            ln.Color=col
+                            ln.Color=C.ACCENT
                             ln.Visible=true
                         end)
                     else
@@ -3058,7 +3012,7 @@ local function Main()
                         local bbg=make("BillboardGui",{
                             Name="DarkMoonNameTag",
                             Adornee=head,
-                            Size=UDim2.fromOffset(160,22),
+                            Size=UDim2.fromOffset(140,22),
                             StudsOffset=Vector3.new(0,2.2,0),
                             AlwaysOnTop=true
                         },parent)
@@ -3075,14 +3029,8 @@ local function Main()
                         nameGuis[p]=entry
                     end
                     local dist=myRoot and math.floor((root.Position-myRoot.Position).Magnitude+0.5) or 0
-                    local role=mm2RoleEspOn and getPlayerRole(p) or nil
-                    if role then
-                        entry.label.Text=string.format("%s [%s · %dm]",p.Name,role,dist)
-                        entry.label.TextColor3=getRoleColor(role)
-                    else
-                        entry.label.Text=string.format("%s [%dm]",p.Name,dist)
-                        entry.label.TextColor3=C.ACCENT
-                    end
+                    entry.label.Text=string.format("%s [%dm]",p.Name,dist)
+                    entry.label.TextColor3=C.ACCENT
                 else
                     removeNameGui(p)
                 end
@@ -3090,7 +3038,25 @@ local function Main()
         end
     end
 
-    toggleRow(visualLeft,1,"ESP","2D bounding box around players",nil,function(v)
+    toggleRow(visualLeft,1,"MM2 2D Box ESP","Red Murderer, Blue Sheriff, Green Innocent",nil,function(v)
+        mm2BoxEspOn=v
+        if not v then
+            clearMm2BoxEsp()
+        end
+        setStatus(v and "MM2 2D BOX ESP ON" or "MM2 2D BOX ESP OFF")
+    end)
+
+    toggleRow(visualLeft,2,"MM2 Role Tags","Show Murderer / Sheriff / Innocent label",nil,function(v)
+        mm2RoleLabelsOn=v
+        if not v then
+            for _,g in pairs(mm2RoleGuis) do
+                pcall(function() g.Enabled=false end)
+            end
+        end
+        setStatus(v and "MM2 ROLE TAGS ON" or "MM2 ROLE TAGS OFF")
+    end)
+
+    toggleRow(visualLeft,3,"ESP","2D bounding box around players",nil,function(v)
         boxEspOn=v
         if not v then
             clearBoxEsp()
@@ -3098,7 +3064,7 @@ local function Main()
         setStatus(v and "ESP ON" or "ESP OFF")
     end)
 
-    toggleRow(visualLeft,2,"Tracers","Lines from bottom screen to players",nil,function(v)
+    toggleRow(visualLeft,4,"Tracers","Lines from bottom screen to players",nil,function(v)
         tracersOn=v
         if not v then
             clearTracers()
@@ -3106,7 +3072,7 @@ local function Main()
         setStatus(v and "TRACERS ON" or "TRACERS OFF")
     end)
 
-    toggleRow(visualLeft,3,"Name ESP","Show player name and distance",nil,function(v)
+    toggleRow(visualLeft,5,"Name ESP","Show player name and distance",nil,function(v)
         nameEspOn=v
         if not v then
             clearNameEsp()
@@ -3116,6 +3082,7 @@ local function Main()
 
     Players.PlayerRemoving:Connect(function(p)
         removeBoxDrawing(p)
+        removeMm2BoxDrawing(p)
         removeTracerDrawing(p)
         removeNameGui(p)
     end)
@@ -3288,255 +3255,9 @@ local function Main()
 
 
 
-    -- MM2 TAB*
-
-    local mm2Tab=newTab("MM2",6)
-
-    local mm2Left=column(mm2Tab,0,0.5,"Roles & ESP")
-
-    local mm2Right=column(mm2Tab,0.5,0.5,"Gun, Coins & TP")
-
-
-
-    local murdererInfoLabel=make("TextLabel",{
-
-        Size=UDim2.new(1,0,0,34),
-
-        BackgroundColor3=C.row,
-
-        Text="Murderer: Unknown",
-
-        Font=Enum.Font.GothamBold,
-
-        TextSize=11,
-
-        TextColor3=C.bad,
-
-        BorderSizePixel=0,
-
-        LayoutOrder=1
-
-    },mm2Left)
-
-    corner(murdererInfoLabel,9)
-
-    registerSearchable(murdererInfoLabel,"MM2",{"Murderer"})
-
-
-
-    local sheriffInfoLabel=make("TextLabel",{
-
-        Size=UDim2.new(1,0,0,34),
-
-        BackgroundColor3=C.row,
-
-        Text="Sheriff: Unknown",
-
-        Font=Enum.Font.GothamBold,
-
-        TextSize=11,
-
-        TextColor3=Color3.fromRGB(80,175,255),
-
-        BorderSizePixel=0,
-
-        LayoutOrder=2
-
-    },mm2Left)
-
-    corner(sheriffInfoLabel,9)
-
-    registerSearchable(sheriffInfoLabel,"MM2",{"Sheriff"})
-
-
-
-    toggleRow(mm2Left,3,"Role ESP","Color ESP/Tracers/Names by role",nil,function(v)
-
-        mm2RoleEspOn=v
-
-        if v then
-
-            if not boxEspOn and not nameEspOn then
-
-                nameEspOn=true
-
-            end
-
-            setStatus("MM2 ROLE ESP ON")
-
-        else
-
-            setStatus("MM2 ROLE ESP OFF",C.sub)
-
-        end
-
-    end)
-
-
-
-    buttonRow(mm2Left,4,"REFRESH ROLES",C.row,function()
-
-        local mur=findRolePlayer("Murderer")
-
-        local sh=findRolePlayer("Sheriff")
-
-        murdererInfoLabel.Text="Murderer: "..(mur and mur.Name or "None detected")
-
-        sheriffInfoLabel.Text="Sheriff: "..(sh and sh.Name or "None detected")
-
-        setStatus("MM2 ROLES UPDATED")
-
-    end)
-
-
-
-    toggleRow(mm2Right,1,"Auto Collect Coins","Move toward nearby MM2 coins",nil,function(v)
-
-        mm2AutoCoinOn=v
-
-        setStatus(v and "AUTO COIN ON" or "AUTO COIN OFF")
-
-    end)
-
-
-
-    buttonRow(mm2Right,2,"GRAB DROPPED GUN",C.ACCENT,function()
-
-        local _,root,_=getChar()
-
-        if not root then
-
-            setStatus("NO CHARACTER",C.bad)
-
-            return
-
-        end
-
-        local gunPart=findDroppedGunPart()
-
-        if not gunPart then
-
-            setStatus("NO DROPPED GUN FOUND",C.bad)
-
-            return
-
-        end
-
-        local prevCFrame=root.CFrame
-
-        root.CFrame=gunPart.CFrame+Vector3.new(0,1.5,0)
-
-        task.delay(0.25,function()
-
-            local _,curRoot,_=getChar()
-
-            if curRoot and curRoot.Parent then
-
-                curRoot.CFrame=prevCFrame
-
-            end
-
-        end)
-
-        setStatus("ATTEMPTED GUN GRAB")
-
-    end)
-
-
-
-    buttonRow(mm2Right,3,"TP TO MURDERER",C.row,function()
-
-        local mur=findRolePlayer("Murderer")
-
-        local targetRoot=mur and mur.Character and mur.Character:FindFirstChild("HumanoidRootPart")
-
-        local _,root=getChar()
-
-        if targetRoot and root then
-
-            root.CFrame=targetRoot.CFrame*CFrame.new(0,0,4)
-
-            setStatus("TP TO MURDERER: "..mur.Name)
-
-        else
-
-            setStatus("MURDERER NOT FOUND",C.bad)
-
-        end
-
-    end)
-
-
-
-    buttonRow(mm2Right,4,"TP TO SHERIFF",C.row,function()
-
-        local sh=findRolePlayer("Sheriff")
-
-        local targetRoot=sh and sh.Character and sh.Character:FindFirstChild("HumanoidRootPart")
-
-        local _,root=getChar()
-
-        if targetRoot and root then
-
-            root.CFrame=targetRoot.CFrame*CFrame.new(0,0,4)
-
-            setStatus("TP TO SHERIFF: "..sh.Name)
-
-        else
-
-            setStatus("SHERIFF NOT FOUND",C.bad)
-
-        end
-
-    end)
-
-
-
-    RunService.Heartbeat:Connect(function(dt)
-
-        local mur=findRolePlayer("Murderer")
-
-        local sh=findRolePlayer("Sheriff")
-
-        murdererInfoLabel.Text="Murderer: "..(mur and mur.Name or "None detected")
-
-        sheriffInfoLabel.Text="Sheriff: "..(sh and sh.Name or "None detected")
-
-
-
-        if mm2AutoCoinOn then
-
-            mm2CoinTimer=mm2CoinTimer+dt
-
-            if mm2CoinTimer>=0.15 then
-
-                mm2CoinTimer=0
-
-                local _,root,hum=getChar()
-
-                if root and hum then
-
-                    local coinPart=findNearestCoinPart(root.Position)
-
-                    if coinPart then
-
-                        hum:MoveTo(coinPart.Position)
-
-                    end
-
-                end
-
-            end
-
-        end
-
-    end)
-
-
-
     -- MISC*
 
-    local miscTab=newTab("Misc",7)
+    local miscTab=newTab("Misc",6)
 
     local miscLeft=column(miscTab,0,0.5,"Utilities")
 
@@ -3702,7 +3423,7 @@ local function Main()
 
         highlights[p]=make("Highlight",{
 
-            FillColor=mm2RoleEspOn and getRoleColor(getPlayerRole(p)) or C.ACCENT,
+            FillColor=C.ACCENT,
 
             FillTransparency=0.6,
 
@@ -3890,7 +3611,7 @@ local function Main()
 
     -- SETTINGS*
 
-    local settingsTab=newTab("Settings",8)
+    local settingsTab=newTab("Settings",7)
 
     local settingsLeft=column(settingsTab,0,0.5,"CUSTOMIZE COLOURS")
 
@@ -4235,10 +3956,6 @@ local function Main()
 
         antiVoidOn=false
 
-        mm2RoleEspOn=false
-
-        mm2AutoCoinOn=false
-
         restoreAntiFlingCollisions()
 
         destroyWaterPart()
@@ -4254,6 +3971,8 @@ local function Main()
         clearHighlights()
 
         clearBoxEsp()
+
+        clearMm2BoxEsp()
 
         clearTracers()
 
@@ -4407,21 +4126,9 @@ local function Main()
 
         stepWalkOnWater()
 
-        if hlOn then
-
-            for p,h in pairs(highlights) do
-
-                if h and h.Parent and p and p.Parent then
-
-                    h.FillColor=mm2RoleEspOn and getRoleColor(getPlayerRole(p)) or C.ACCENT
-
-                end
-
-            end
-
-        end
-
         updateBoxEsp()
+
+        updateMm2BoxEsp()
 
         updateTracers()
 
