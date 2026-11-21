@@ -1,7 +1,7 @@
 --[[
 	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
 ]]
--- DARK MOON V 1.2
+-- DARK MOON V 2
 -- By biyxznd
 -- Discord: https://discord.gg/QxRKp9wNeE
 
@@ -45,7 +45,7 @@ local function Main()
 
             game:GetService("StarterGui"):SetCore("SendNotification", {
 
-                Title = "DARK MOON V 1.2",
+                Title = "DARK MOON V 2",
 
                 Text = msg,
 
@@ -59,7 +59,7 @@ local function Main()
 
 
 
-    notify("Loading DARK MOON V 1.2...")
+    notify("Loading DARK MOON V 2...")
 
 
 
@@ -369,7 +369,7 @@ local function Main()
         Size=UDim2.fromOffset(260,14),
         Position=UDim2.fromOffset(120,36),
         BackgroundTransparency=1,
-        Text="V 1.2 · by biyxznd · "..DISCORD_INVITE,
+        Text="V 2 · by biyxznd · "..DISCORD_INVITE,
         Font=Enum.Font.Gotham,
         TextSize=10,
         TextColor3=C.sub,
@@ -579,7 +579,7 @@ local function Main()
                 profileGameLabel.Text=info.Name
             end
             if gameTitleLabel and gameTitleLabel.Parent then
-                gameTitleLabel.Text="V 1.2 · by biyxznd · "..info.Name
+                gameTitleLabel.Text="V 2 · by biyxznd · "..info.Name
             end
         end
     end)
@@ -2668,74 +2668,27 @@ local function Main()
 
     local visualTab=newTab("Visual",4)
 
-    local visualLeft=column(visualTab,0,0.5,"Visuals & MM2 ESP")
+    local visualLeft=column(visualTab,0,0.5,"Visuals")
 
     local visualRight=column(visualTab,0.5,0.5,"Options")
 
 
 
     local boxEspOn=false
-    local mm2BoxEspOn=false
-    local mm2RoleLabelsOn=true
     local tracersOn=false
     local nameEspOn=false
     local boxEspDrawings={}
-    local mm2BoxDrawings={}
-    local mm2RoleGuis={}
     local tracerDrawings={}
     local nameGuis={}
 
-    local ROLE_COLORS={
-        Murderer=Color3.fromRGB(240,65,85),
-        Sheriff=Color3.fromRGB(65,155,255),
-        Innocent=Color3.fromRGB(100,240,140)
-    }
-
-    local function getMm2Role(p)
-        local roleAttr=p:GetAttribute("Role") or (p.Character and p.Character:GetAttribute("Role"))
-        if type(roleAttr)=="string" then
-            local low=roleAttr:lower()
-            if low:find("murd",1,true) then return "Murderer" end
-            if low:find("sher",1,true) or low:find("hero",1,true) then return "Sheriff" end
-            if low:find("inno",1,true) then return "Innocent" end
-        end
-
-        local containers={}
-        if p.Character then table.insert(containers,p.Character) end
-        local bp=p:FindFirstChildOfClass("Backpack")
-        if bp then table.insert(containers,bp) end
-        local sg=p:FindFirstChildOfClass("StarterGear")
-        if sg then table.insert(containers,sg) end
-
-        local hasKnife=false
-        local hasGun=false
-
-        for _,cont in ipairs(containers) do
-            for _,item in ipairs(cont:GetChildren()) do
-                if item:IsA("Tool") or item:IsA("HopperBin") then
-                    local n=item.Name:lower()
-                    if n=="knife" or n:find("knife",1,true) or n:find("blade",1,true) or n:find("murd",1,true) then
-                        hasKnife=true
-                    elseif n=="gun" or n:find("gun",1,true) or n:find("revolver",1,true) or n:find("pistol",1,true) or n:find("sher",1,true) then
-                        hasGun=true
-                    end
-                end
-            end
-        end
-
-        if hasKnife then return "Murderer" end
-        if hasGun then return "Sheriff" end
-        return "Innocent"
-    end
-
-    local function createBoxDrawing(color)
+    local function createBoxDrawing()
         if not Drawing or not Drawing.new then return nil end
         local ok,box=pcall(function()
             local sq=Drawing.new("Square")
             sq.Visible=false
-            sq.Thickness=1.6
+            sq.Thickness=1.5
             sq.Filled=false
-            sq.Color=color or C.ACCENT
+            sq.Color=C.ACCENT
             return sq
         end)
         return ok and box or nil
@@ -2761,19 +2714,6 @@ local function Main()
         end
     end
 
-    local function removeMm2BoxDrawing(p)
-        local sq=mm2BoxDrawings[p]
-        if sq then
-            pcall(function() sq:Remove() end)
-            mm2BoxDrawings[p]=nil
-        end
-        local g=mm2RoleGuis[p]
-        if g then
-            pcall(function() g:Destroy() end)
-            mm2RoleGuis[p]=nil
-        end
-    end
-
     local function removeTracerDrawing(p)
         local ln=tracerDrawings[p]
         if ln then
@@ -2793,15 +2733,6 @@ local function Main()
     local function clearBoxEsp()
         for p,_ in pairs(boxEspDrawings) do
             removeBoxDrawing(p)
-        end
-    end
-
-    local function clearMm2BoxEsp()
-        for p,_ in pairs(mm2BoxDrawings) do
-            removeMm2BoxDrawing(p)
-        end
-        for p,_ in pairs(mm2RoleGuis) do
-            removeMm2BoxDrawing(p)
         end
     end
 
@@ -2832,7 +2763,7 @@ local function Main()
             if p~=player then
                 local sq=boxEspDrawings[p]
                 if not sq then
-                    sq=createBoxDrawing(C.ACCENT)
+                    sq=createBoxDrawing()
                     if sq then boxEspDrawings[p]=sq end
                 end
 
@@ -2860,93 +2791,6 @@ local function Main()
                     end
                 elseif sq then
                     pcall(function() sq.Visible=false end)
-                end
-            end
-        end
-    end
-
-    local function updateMm2BoxEsp()
-        if not mm2BoxEspOn then
-            for _,sq in pairs(mm2BoxDrawings) do
-                pcall(function() sq.Visible=false end)
-            end
-            for _,g in pairs(mm2RoleGuis) do
-                pcall(function() g.Enabled=false end)
-            end
-            return
-        end
-
-        local cam=workspace.CurrentCamera
-        if not cam then return end
-
-        for _,p in ipairs(Players:GetPlayers()) do
-            if p~=player then
-                local role=getMm2Role(p)
-                local roleColor=ROLE_COLORS[role] or ROLE_COLORS.Innocent
-
-                local sq=mm2BoxDrawings[p]
-                if not sq then
-                    sq=createBoxDrawing(roleColor)
-                    if sq then mm2BoxDrawings[p]=sq end
-                end
-
-                local char=p.Character
-                local root=char and char:FindFirstChild("HumanoidRootPart")
-                local head=char and char:FindFirstChild("Head")
-
-                if sq and root and head then
-                    local topPos,topVis=cam:WorldToViewportPoint(head.Position+Vector3.new(0,0.8,0))
-                    local botPos,botVis=cam:WorldToViewportPoint(root.Position-Vector3.new(0,3,0))
-
-                    if topVis and botVis and topPos.Z>0 then
-                        local height=math.abs(botPos.Y-topPos.Y)
-                        local width=math.clamp(height*0.55,10,300)
-                        local centerX=(topPos.X+botPos.X)*0.5
-
-                        pcall(function()
-                            sq.Size=Vector2.new(width,height)
-                            sq.Position=Vector2.new(centerX-width*0.5,math.min(topPos.Y,botPos.Y))
-                            sq.Color=roleColor
-                            sq.Visible=true
-                        end)
-                    else
-                        pcall(function() sq.Visible=false end)
-                    end
-                elseif sq then
-                    pcall(function() sq.Visible=false end)
-                end
-
-                if mm2RoleLabelsOn and head and root then
-                    local entry=mm2RoleGuis[p]
-                    if not entry or not entry.gui or not entry.gui.Parent or entry.gui.Adornee~=head then
-                        if entry and entry.gui then pcall(function() entry.gui:Destroy() end) end
-                        local bbg=make("BillboardGui",{
-                            Name="DarkMoonMm2RoleTag",
-                            Adornee=head,
-                            Size=UDim2.fromOffset(170,22),
-                            StudsOffset=Vector3.new(0,2.4,0),
-                            AlwaysOnTop=true
-                        },parent)
-                        local lbl=make("TextLabel",{
-                            Size=UDim2.fromScale(1,1),
-                            BackgroundTransparency=1,
-                            Text=p.Name,
-                            Font=Enum.Font.GothamBold,
-                            TextSize=11,
-                            TextColor3=roleColor,
-                            TextStrokeTransparency=0.3
-                        },bbg)
-                        entry={gui=bbg,label=lbl}
-                        mm2RoleGuis[p]=entry
-                    end
-                    entry.gui.Enabled=true
-                    entry.label.Text=string.format("%s [%s]",p.Name,role)
-                    entry.label.TextColor3=roleColor
-                else
-                    local entry=mm2RoleGuis[p]
-                    if entry and entry.gui then
-                        entry.gui.Enabled=false
-                    end
                 end
             end
         end
@@ -3038,25 +2882,7 @@ local function Main()
         end
     end
 
-    toggleRow(visualLeft,1,"MM2 2D Box ESP","Red Murderer, Blue Sheriff, Green Innocent",nil,function(v)
-        mm2BoxEspOn=v
-        if not v then
-            clearMm2BoxEsp()
-        end
-        setStatus(v and "MM2 2D BOX ESP ON" or "MM2 2D BOX ESP OFF")
-    end)
-
-    toggleRow(visualLeft,2,"MM2 Role Tags","Show Murderer / Sheriff / Innocent label",nil,function(v)
-        mm2RoleLabelsOn=v
-        if not v then
-            for _,g in pairs(mm2RoleGuis) do
-                pcall(function() g.Enabled=false end)
-            end
-        end
-        setStatus(v and "MM2 ROLE TAGS ON" or "MM2 ROLE TAGS OFF")
-    end)
-
-    toggleRow(visualLeft,3,"ESP","2D bounding box around players",nil,function(v)
+    toggleRow(visualLeft,1,"ESP","2D bounding box around players",nil,function(v)
         boxEspOn=v
         if not v then
             clearBoxEsp()
@@ -3064,7 +2890,7 @@ local function Main()
         setStatus(v and "ESP ON" or "ESP OFF")
     end)
 
-    toggleRow(visualLeft,4,"Tracers","Lines from bottom screen to players",nil,function(v)
+    toggleRow(visualLeft,2,"Tracers","Lines from bottom screen to players",nil,function(v)
         tracersOn=v
         if not v then
             clearTracers()
@@ -3072,7 +2898,7 @@ local function Main()
         setStatus(v and "TRACERS ON" or "TRACERS OFF")
     end)
 
-    toggleRow(visualLeft,5,"Name ESP","Show player name and distance",nil,function(v)
+    toggleRow(visualLeft,3,"Name ESP","Show player name and distance",nil,function(v)
         nameEspOn=v
         if not v then
             clearNameEsp()
@@ -3082,7 +2908,6 @@ local function Main()
 
     Players.PlayerRemoving:Connect(function(p)
         removeBoxDrawing(p)
-        removeMm2BoxDrawing(p)
         removeTracerDrawing(p)
         removeNameGui(p)
     end)
@@ -3972,8 +3797,6 @@ local function Main()
 
         clearBoxEsp()
 
-        clearMm2BoxEsp()
-
         clearTracers()
 
         clearNameEsp()
@@ -4128,8 +3951,6 @@ local function Main()
 
         updateBoxEsp()
 
-        updateMm2BoxEsp()
-
         updateTracers()
 
         updateNameEsp()
@@ -4188,9 +4009,9 @@ local function Main()
 
     setStatus("READY | RIGHT SHIFT: MENU")
 
-    notify("DARK MOON V 1.2 Loaded!")
+    notify("DARK MOON V 2 Loaded!")
 
-    print("DARK MOON V 1.2 LOADED | BY BIYXZND")
+    print("DARK MOON V 2 LOADED | BY BIYXZND")
 
     print("DISCORD: "..DISCORD_INVITE)
 
@@ -4204,7 +4025,7 @@ local ok,err=pcall(Main)
 
 if not ok then
 
-    warn("[DARK MOON V 1.2] Failed to load: "..tostring(err))
+    warn("[DARK MOON V 2] Failed to load: "..tostring(err))
 
     pcall(function()
 
@@ -4238,7 +4059,7 @@ if not ok then
 
         box.Font=Enum.Font.Gotham
 
-        box.Text="DARK MOON V 1.2 failed to load:\n\n"..tostring(err).."\n\nClick to close"
+        box.Text="DARK MOON V 2 failed to load:\n\n"..tostring(err).."\n\nClick to close"
 
         box.Parent=gui
 
